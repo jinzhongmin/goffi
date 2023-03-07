@@ -95,8 +95,10 @@ func NewCif(abi Abi, ret *Type, args ...*Type) (*Cif, error) {
 	//malloc return val ptr
 	if ret == nil {
 		cif.ret = mem.Malloc(1, int(Void.size))
+		mem.Memset(cif.ret, 0, int(Void.size))
 	} else {
 		cif.ret = mem.Malloc(1, int(ret.size))
+		mem.Memset(cif.ret, 0, int(ret.size))
 	}
 
 	//arg typs ptr
