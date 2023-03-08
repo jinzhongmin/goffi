@@ -144,6 +144,9 @@ func (cif *Cif) Free() {
 }
 func (cif *Cif) Call(fn unsafe.Pointer, argAddr ...any) unsafe.Pointer {
 	argc := len(argAddr)
+	if argc != int((**cif.cif.arg_types).size) {
+		panic("param len not equal arg")
+	}
 	argv := new(unsafe.Pointer)
 	if argc == 0 {
 		_argv := mem.Malloc(1, 8)
