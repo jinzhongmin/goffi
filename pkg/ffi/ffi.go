@@ -10,7 +10,6 @@ extern void closure_caller(ffi_cif* cif, void* ret, void* args, void* user_data)
 import "C"
 import (
 	"errors"
-	"reflect"
 	"unsafe"
 
 	"github.com/jinzhongmin/mem"
@@ -142,9 +141,9 @@ func (cif *Cif) Free() {
 		mem.Free(unsafe.Pointer(cif.cif))
 	}
 }
-func (cif *Cif) Call(fn unsafe.Pointer, argAddr ...any) unsafe.Pointer {
+func (cif *Cif) Call(fn unsafe.Pointer, argAddr ...interface{}) unsafe.Pointer {
 	argc := len(argAddr)
-	if argc != int((**cif.cif.arg_types).size) {
+	if argc != int(cif.cif.nargs) {
 		panic("param len not equal arg")
 	}
 	argv := new(unsafe.Pointer)
@@ -162,7 +161,12 @@ func (cif *Cif) Call(fn unsafe.Pointer, argAddr ...any) unsafe.Pointer {
 				mem.PushAt(_argv, i, nil)
 				continue
 			}
-			mem.PushAt(_argv, i, reflect.ValueOf(argAddr[i]).UnsafePointer())
+			tv := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&argAddr[i])))
+			if *(*uint32)(tv[0]) != 8 {
+				panic("The data in the argAddr array of the Call method must be an address, such as &a")
+			}
+			v := tv[1]
+			mem.PushAt(_argv, i, v)
 		}
 	}
 	C.ffi_call(cif.cif, (*[0]byte)(fn), cif.ret, (*unsafe.Pointer)(*argv))
@@ -184,12 +188,12 @@ type ClosureConf struct {
 type ClosureData struct {
 	Args     []unsafe.Pointer
 	Ret      unsafe.Pointer
-	UserData []any
+	UserData []interface{}
 }
 type closureUserData struct {
 	fn       func(*ClosureData)
 	argc     int
-	userData *[]any
+	userData *[]interface{}
 }
 
 //export closure_caller
@@ -203,7 +207,7 @@ func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
 	}
 	data.fn(input)
 }
-func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...any) *Closure {
+func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...interface{}) *Closure {
 	var err error
 	cls := new(Closure)
 	cls.cif, err = NewCif(conf.Abi, conf.Ret, conf.Args...)
@@ -227,7 +231,7 @@ func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...any) *Closu
 		(*[0]byte)(C.closure_caller), cls.data, mem.Pop(cls.fnptr))
 	return cls
 }
-func (cls *Closure) Call(args ...any) unsafe.Pointer {
+func (cls *Closure) Call(args ...interface{}) unsafe.Pointer {
 	return cls.cif.Call(mem.Pop(cls.fnptr), args...)
 }
 func (cls *Closure) Cfn() unsafe.Pointer {
