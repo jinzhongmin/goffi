@@ -43,18 +43,6 @@ type Abi C.ffi_abi
 
 func (a Abi) toC() C.ffi_abi { return C.ffi_abi(a) }
 
-const (
-	AbiFirstAbi Abi = 0
-	AbiSysv     Abi = 1
-	AbiThiscall Abi = 3
-	AbiFastcall Abi = 4
-	AbiStdcall  Abi = 5
-	AbiPascal   Abi = 6
-	AbiRegister Abi = 7
-	AbiMsCdecl  Abi = 8
-	AbiDefault  Abi = AbiSysv
-)
-
 type Status C.ffi_status
 
 const (
@@ -80,47 +68,41 @@ func (st Status) Error() error {
 }
 
 type Cif struct {
-	cif *C.ffi_cif
-	ret unsafe.Pointer
+	cif    *C.ffi_cif
+	ret    unsafe.Pointer
+	params []*Type
 }
 
-func NewCif(abi Abi, ret *Type, args ...*Type) (*Cif, error) {
+func NewCif(abi Abi, output *Type, inputs ...*Type) (*Cif, error) {
 	cif := new(Cif)
 
 	size := mem.Sizeof(C.ffi_cif{})
 	cif.cif = (*C.ffi_cif)(mem.Malloc(1, size))
 	mem.Memset(unsafe.Pointer(cif.cif), 0, size)
 
-	//malloc return val ptr
-	if ret == nil {
-		cif.ret = mem.Malloc(1, int(Void.size))
-		mem.Memset(cif.ret, 0, int(Void.size))
+	cif.params = make([]*Type, 0)
+	if inputs == nil || (len(inputs) == 1 && inputs[0] == nil) {
+		cif.params = append(cif.params, Void)
 	} else {
-		cif.ret = mem.Malloc(1, int(ret.size))
-		mem.Memset(cif.ret, 0, int(ret.size))
+		cif.params = append(cif.params, inputs...)
 	}
 
-	//arg typs ptr
-	ats := new(unsafe.Pointer)
-	if len(args) == 0 {
-		_ats := mem.Malloc(1, 8)
-		(*ats) = _ats
-		mem.PushAt(_ats, 0, unsafe.Pointer(Void.toC()))
-	} else {
-		_ats := mem.Malloc(len(args), 8)
-		(*ats) = _ats
-		for i := range args {
-			mem.PushAt(_ats, i, unsafe.Pointer(args[i].toC()))
-		}
+	inputLen := len(cif.params)
+	args := mem.Malloc(inputLen, 8)
+	mem.Memset(args, 0, inputLen*8)
+
+	for i := range cif.params {
+		mem.PushAt(args, i, unsafe.Pointer(cif.params[i].toC()))
 	}
 
-	_ret := Void
-	if ret != nil {
-		_ret = ret
+	ret := Void
+	if output != nil {
+		ret = output
 	}
+	cif.ret = mem.Malloc(1, int(ret.size))
 
 	st := C.ffi_prep_cif(cif.cif, abi.toC(),
-		C.uint(len(args)), _ret.toC(), (**C.ffi_type)(*ats))
+		C.uint(uint32(inputLen)), ret.toC(), (**C.ffi_type)(unsafe.Pointer(&args)))
 
 	err := Status(st).Error()
 	if err != nil {
@@ -131,45 +113,51 @@ func NewCif(abi Abi, ret *Type, args ...*Type) (*Cif, error) {
 	return cif, nil
 }
 func (cif *Cif) Free() {
+	cif.params = nil
 	if cif.ret != nil {
 		mem.Free(cif.ret)
 	}
 	if cif.cif.arg_types != nil {
-		mem.Free(unsafe.Pointer(cif.cif.arg_types))
+		p := *(*unsafe.Pointer)((unsafe.Pointer)(cif.cif.arg_types))
+		mem.Free(unsafe.Pointer(p))
 	}
 	if cif.cif != nil {
 		mem.Free(unsafe.Pointer(cif.cif))
 	}
 }
-func (cif *Cif) Call(fn unsafe.Pointer, argAddr ...interface{}) unsafe.Pointer {
-	argc := len(argAddr)
-	if argc != int(cif.cif.nargs) {
-		panic("param len not equal arg")
-	}
-	argv := new(unsafe.Pointer)
-	if argc == 0 {
-		_argv := mem.Malloc(1, 8)
-		(*argv) = _argv
-		defer mem.Free(_argv)
-	} else {
-		_argv := mem.Malloc(argc, 8)
-		(*argv) = _argv
-		defer mem.Free(_argv)
+func (cif *Cif) Call(fn unsafe.Pointer, args ...interface{}) unsafe.Pointer {
+	argc := len(args)
+	if cif.params[0] == Void &&
+		((args == nil) || (len(args) == 1 && args[0] == nil)) {
 
-		for i := range argAddr {
-			if argAddr[i] == nil {
-				mem.PushAt(_argv, i, nil)
-				continue
-			}
-			tv := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&argAddr[i])))
-			if *(*uint32)(tv[0]) != 8 {
-				panic("The data in the argAddr array of the Call method must be an address, such as &a")
-			}
-			v := tv[1]
-			mem.PushAt(_argv, i, v)
+		argc = 0
+		args = nil
+
+	} else {
+		if argc != int(cif.cif.nargs) {
+			panic("param len not equal arg")
 		}
 	}
-	C.ffi_call(cif.cif, (*[0]byte)(fn), cif.ret, (*unsafe.Pointer)(*argv))
+
+	argcN := 1
+	if argc > 1 {
+		argcN = argc
+	}
+	argv := mem.Malloc(argcN, 8)
+	mem.Memset(argv, 0, 8*argcN)
+	defer mem.Free(argv)
+
+	if argc != 0 {
+		for i := range args {
+			if args[i] == nil {
+				continue
+			}
+			vs := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&args[i])))
+			mem.PushAt(argv, i, *(*unsafe.Pointer)(vs[1]))
+		}
+	}
+
+	C.ffi_call(cif.cif, (*[0]byte)(fn), cif.ret, (*unsafe.Pointer)(argv))
 	return cif.ret
 }
 
@@ -181,9 +169,9 @@ type Closure struct {
 	data    unsafe.Pointer
 }
 type ClosureConf struct {
-	Abi  Abi
-	Args []*Type
-	Ret  *Type
+	Abi    Abi
+	Inputs []*Type
+	Output *Type
 }
 type ClosureData struct {
 	Args     []unsafe.Pointer
@@ -210,7 +198,7 @@ func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
 func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...interface{}) *Closure {
 	var err error
 	cls := new(Closure)
-	cls.cif, err = NewCif(conf.Abi, conf.Ret, conf.Args...)
+	cls.cif, err = NewCif(conf.Abi, conf.Output, conf.Inputs...)
 	if err != nil {
 		panic(err)
 	}
@@ -221,7 +209,7 @@ func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...interface{}
 	cls.data = mem.Malloc(1, mem.Sizeof(closureUserData{}))
 	data := (*closureUserData)(cls.data)
 	data.fn = fn
-	data.argc = len(conf.Args)
+	data.argc = len(conf.Inputs)
 	data.userData = nil
 	if userData != nil {
 		data.userData = &userData
