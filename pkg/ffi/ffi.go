@@ -127,12 +127,9 @@ func (cif *Cif) Free() {
 }
 func (cif *Cif) Call(fn unsafe.Pointer, args ...interface{}) unsafe.Pointer {
 	argc := len(args)
-	if cif.params[0] == Void &&
-		((args == nil) || (len(args) == 1 && args[0] == nil)) {
-
+	if cif.params[0] == Void && args == nil {
 		argc = 0
 		args = nil
-
 	} else {
 		if argc != int(cif.cif.nargs) {
 			panic("param len not equal arg")
