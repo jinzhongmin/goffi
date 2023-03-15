@@ -1,2 +1,4 @@
-github.com/jinzhongmin/mem v0.0.0-20230227042413-8fb11fa6bf3f h1:04PnNA+yHh6q03umD9jiDi1cNx7npC3bp6qk7QCZU2M=
-github.com/jinzhongmin/mem v0.0.0-20230227042413-8fb11fa6bf3f/go.mod h1:nyYIFZKZz2FoAXqZSg0gbAQMbnoPe95zU1RyDns9//g=
+github.com/jinzhongmin/usf v0.0.0-20230314075950-f858a2e99650 h1:v8JhGLQ860GTgu4x+SmnAaOBMgmG+bC9kuN5eSLfyiM=
+github.com/jinzhongmin/usf v0.0.0-20230314075950-f858a2e99650/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=
+github.com/jinzhongmin/usf v0.0.0-20230315053005-5f4848b1d802 h1:4h92UzeFJdwiIGt3vzQKn/OA3uba76pPl+0pOMrpKLU=
+github.com/jinzhongmin/usf v0.0.0-20230315053005-5f4848b1d802/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=

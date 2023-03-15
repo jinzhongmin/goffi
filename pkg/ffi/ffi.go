@@ -12,31 +12,29 @@ import (
 	"errors"
 	"unsafe"
 
-	"github.com/jinzhongmin/mem"
+	"github.com/jinzhongmin/usf"
 )
 
-type Type C.ffi_type
-
-func (typ *Type) toC() *C.ffi_type { return (*C.ffi_type)(typ) }
+type Type *C.ffi_type
 
 var (
-	Void    *Type = (*Type)(&C.ffi_type_void)
-	Pointer *Type = (*Type)(&C.ffi_type_pointer)
-	Uint8   *Type = (*Type)(&C.ffi_type_uint8)
-	Int8    *Type = (*Type)(&C.ffi_type_sint8)
-	Uint16  *Type = (*Type)(&C.ffi_type_uint16)
-	Int16   *Type = (*Type)(&C.ffi_type_sint16)
-	Uint32  *Type = (*Type)(&C.ffi_type_uint32)
-	Int32   *Type = (*Type)(&C.ffi_type_sint32)
-	Uint64  *Type = (*Type)(&C.ffi_type_uint64)
-	Int64   *Type = (*Type)(&C.ffi_type_sint64)
+	Void    Type = &C.ffi_type_void
+	Pointer Type = &C.ffi_type_pointer
+	Uint8   Type = &C.ffi_type_uint8
+	Int8    Type = &C.ffi_type_sint8
+	Uint16  Type = &C.ffi_type_uint16
+	Int16   Type = &C.ffi_type_sint16
+	Uint32  Type = &C.ffi_type_uint32
+	Int32   Type = &C.ffi_type_sint32
+	Uint64  Type = &C.ffi_type_uint64
+	Int64   Type = &C.ffi_type_sint64
 
-	Float             *Type = (*Type)(&C.ffi_type_float)
-	Double            *Type = (*Type)(&C.ffi_type_double)
-	LongDouble        *Type = (*Type)(&C.ffi_type_longdouble)
-	ComplexFloat      *Type = (*Type)(&C.ffi_type_complex_float)
-	Complexdouble     *Type = (*Type)(&C.ffi_type_complex_double)
-	ComplexLongdouble *Type = (*Type)(&C.ffi_type_complex_longdouble)
+	Float             Type = &C.ffi_type_float
+	Double            Type = &C.ffi_type_double
+	LongDouble        Type = &C.ffi_type_longdouble
+	ComplexFloat      Type = &C.ffi_type_complex_float
+	Complexdouble     Type = &C.ffi_type_complex_double
+	ComplexLongdouble Type = &C.ffi_type_complex_longdouble
 )
 
 type Abi C.ffi_abi
@@ -69,40 +67,37 @@ func (st Status) Error() error {
 
 type Cif struct {
 	cif    *C.ffi_cif
+	params unsafe.Pointer
 	ret    unsafe.Pointer
-	params []*Type
 }
 
-func NewCif(abi Abi, output *Type, inputs ...*Type) (*Cif, error) {
-	cif := new(Cif)
-
-	size := mem.Sizeof(C.ffi_cif{})
-	cif.cif = (*C.ffi_cif)(mem.Malloc(1, size))
-	mem.Memset(unsafe.Pointer(cif.cif), 0, size)
-
-	cif.params = make([]*Type, 0)
-	if inputs == nil || (len(inputs) == 1 && inputs[0] == nil) {
-		cif.params = append(cif.params, Void)
-	} else {
-		cif.params = append(cif.params, inputs...)
+func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
+	if inputs == nil || output == nil {
+		panic("Type cannot be nil")
 	}
 
-	inputLen := len(cif.params)
-	args := mem.Malloc(inputLen, 8)
-	mem.Memset(args, 0, inputLen*8)
+	cif := new(Cif)
+	cifSize := usf.Sizeof(C.ffi_cif{})
+	cif.cif = (*C.ffi_cif)(usf.Malloc(1, cifSize))
+	usf.Memset(unsafe.Pointer(cif.cif), 0, cifSize)
 
-	for i := range cif.params {
-		mem.PushAt(args, i, unsafe.Pointer(cif.params[i].toC()))
+	inLen := len(inputs)
+	if inLen > 0 {
+		cif.params = usf.Malloc(uint64(inLen), 8)
+		usf.Memset(cif.params, 0, uint64(inLen)*8)
+	}
+	for i := range inputs {
+		usf.PushAt(cif.params, uint64(i), unsafe.Pointer(inputs[i]))
 	}
 
 	ret := Void
 	if output != nil {
 		ret = output
 	}
-	cif.ret = mem.Malloc(1, int(ret.size))
+	cif.ret = usf.Malloc(1, uint64(ret.size))
 
 	st := C.ffi_prep_cif(cif.cif, abi.toC(),
-		C.uint(uint32(inputLen)), ret.toC(), (**C.ffi_type)(unsafe.Pointer(&args)))
+		C.uint(uint32(inLen)), ret, (**C.ffi_type)(cif.params))
 
 	err := Status(st).Error()
 	if err != nil {
@@ -113,129 +108,134 @@ func NewCif(abi Abi, output *Type, inputs ...*Type) (*Cif, error) {
 	return cif, nil
 }
 func (cif *Cif) Free() {
-	cif.params = nil
 	if cif.ret != nil {
-		mem.Free(cif.ret)
+		usf.Free(cif.ret)
 	}
-	if cif.cif.arg_types != nil {
-		p := *(*unsafe.Pointer)((unsafe.Pointer)(cif.cif.arg_types))
-		mem.Free(unsafe.Pointer(p))
+	if cif.params != nil {
+		usf.Free(cif.params)
 	}
 	if cif.cif != nil {
-		mem.Free(unsafe.Pointer(cif.cif))
+		usf.Free(unsafe.Pointer(cif.cif))
 	}
 }
-func (cif *Cif) Call(fn unsafe.Pointer, args ...interface{}) unsafe.Pointer {
+
+func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}) unsafe.Pointer {
+	if args == nil {
+		panic("args cannot be nil")
+	}
+
 	argc := len(args)
-	if cif.params[0] == Void && args == nil {
-		argc = 0
-		args = nil
-	} else {
-		if argc != int(cif.cif.nargs) {
-			panic("param len not equal arg")
+	var argv unsafe.Pointer
+	if argc > 0 {
+		argv = usf.Malloc(uint64(argc), 8)
+		usf.Memset(argv, 0, 8*uint64(argc))
+		defer usf.Free(argv)
+	}
+
+	for i := range args {
+		if args[i] == nil {
+			v := usf.Malloc(1, 8)
+			usf.Memset(v, 0, 8)
+			defer usf.Free(v)
+			usf.PushAt(argv, uint64(i), unsafe.Pointer(v))
+			continue
 		}
+		lv := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&args[i])))
+		usf.PushAt(argv, uint64(i), lv[1])
 	}
-
-	argcN := 1
-	if argc > 1 {
-		argcN = argc
-	}
-	argv := mem.Malloc(argcN, 8)
-	mem.Memset(argv, 0, 8*argcN)
-	defer mem.Free(argv)
-
-	if argc != 0 {
-		for i := range args {
-			if args[i] == nil {
-				continue
-			}
-			vs := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&args[i])))
-			mem.PushAt(argv, i, *(*unsafe.Pointer)(vs[1]))
-		}
-	}
-
 	C.ffi_call(cif.cif, (*[0]byte)(fn), cif.ret, (*unsafe.Pointer)(argv))
 	return cif.ret
 }
 
 type Closure struct {
-	cif *Cif
-
-	closure *C.ffi_closure
-	fnptr   unsafe.Pointer
-	data    unsafe.Pointer
+	cif                *Cif
+	cfn                unsafe.Pointer
+	closure            *C.ffi_closure
+	callback           func(*ClosureParams)
+	callback_user_data []interface{}
+	callback_data      unsafe.Pointer
 }
+
+// for NewClosure configure
 type ClosureConf struct {
 	Abi    Abi
-	Inputs []*Type
-	Output *Type
+	Inputs []Type
+	Output Type
 }
-type ClosureData struct {
+
+// for callback call
+type ClosureParams struct {
 	Args     []unsafe.Pointer
-	Ret      unsafe.Pointer
+	Return   unsafe.Pointer
 	UserData []interface{}
 }
-type closureUserData struct {
-	fn       func(*ClosureData)
+type closure_Data struct {
+	callback func(*ClosureParams)
 	argc     int
 	userData *[]interface{}
 }
 
 //export closure_caller
 func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
-	data := (*closureUserData)(userData)
-	input := new(ClosureData)
-	input.Args = *(*[]unsafe.Pointer)(mem.Slice(args, data.argc))
-	input.Ret = ret
+	data := (*closure_Data)(userData)
+
+	input := new(ClosureParams)
+	input.Args = *(*[]unsafe.Pointer)(usf.Slice(args, uint64(data.argc)))
+	input.Return = ret
 	if data.userData != nil {
 		input.UserData = *data.userData
 	}
-	data.fn(input)
+
+	data.callback(input)
 }
-func NewClosure(conf ClosureConf, fn func(*ClosureData), userData ...interface{}) *Closure {
+func NewClosure(conf ClosureConf, callback func(*ClosureParams), userData []interface{}) *Closure {
 	var err error
 	cls := new(Closure)
-	cls.cif, err = NewCif(conf.Abi, conf.Output, conf.Inputs...)
+	cls.cif, err = NewCif(conf.Abi, conf.Output, conf.Inputs)
 	if err != nil {
 		panic(err)
 	}
-	cls.fnptr = mem.Malloc(1, 8)
-	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.ulonglong(mem.Sizeof(C.ffi_closure{})), (*unsafe.Pointer)(cls.fnptr)))
 
-	cls.data = mem.Malloc(1, mem.Sizeof(closureUserData{}))
-	data := (*closureUserData)(cls.data)
-	data.fn = fn
-	data.argc = len(conf.Inputs)
-	data.userData = nil
-	if userData != nil {
-		data.userData = &userData
-	}
+	cls.cfn = usf.Malloc(1, 8)
+	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
+		C.ulonglong(usf.Sizeof(C.ffi_closure{})), (*unsafe.Pointer)(cls.cfn)))
+
+	cls.callback = callback
+	cls.callback_user_data = userData
+	cls.callback_data = (usf.MallocOf(1, closure_Data{}))
+	(*closure_Data)(cls.callback_data).callback = callback
+	(*closure_Data)(cls.callback_data).argc = len(conf.Inputs)
+	(*closure_Data)(cls.callback_data).userData = &cls.callback_user_data
 
 	C.ffi_prep_closure_loc(cls.closure, cls.cif.cif,
-		(*[0]byte)(C.closure_caller), cls.data, mem.Pop(cls.fnptr))
+		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls.callback_data), usf.Pop(cls.cfn))
 	return cls
 }
-func (cls *Closure) Call(args ...interface{}) unsafe.Pointer {
-	return cls.cif.Call(mem.Pop(cls.fnptr), args...)
+func (cls *Closure) Call(args []interface{}) unsafe.Pointer {
+	return cls.cif.Call(usf.Pop(cls.cfn), args)
 }
 func (cls *Closure) Cfn() unsafe.Pointer {
-	return mem.Pop(cls.fnptr)
+	return (*(*[1]unsafe.Pointer)(cls.cfn))[0]
 }
 func (cls *Closure) Free() {
-	if cls.cif != nil {
-		cls.cif.Free()
-	}
-	if cls.fnptr != nil {
-		mem.Free(cls.fnptr)
-	}
-	if cls.data != nil {
-		data := (*closureUserData)(cls.data)
-		data.fn = nil
-		data.userData = nil
-		mem.Free(cls.data)
-	}
 	if cls.closure != nil {
 		C.ffi_closure_free(unsafe.Pointer(cls.closure))
+	}
+	if cls.callback_data != nil {
+		(*closure_Data)(cls.callback_data).callback = nil
+		(*closure_Data)(cls.callback_data).userData = nil
+		usf.Free(cls.callback_data)
+	}
+	if cls.cfn != nil {
+		usf.Free(cls.cfn)
+	}
+	if cls.callback != nil {
+		cls.callback = nil
+	}
+	if cls.callback_user_data != nil {
+		cls.callback_user_data = nil
+	}
+	if cls.cif != nil {
+		cls.cif.Free()
 	}
 }
