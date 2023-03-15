@@ -37,10 +37,6 @@ var (
 	ComplexLongdouble Type = &C.ffi_type_complex_longdouble
 )
 
-type Abi C.ffi_abi
-
-func (a Abi) toC() C.ffi_abi { return C.ffi_abi(a) }
-
 type Status C.ffi_status
 
 const (
