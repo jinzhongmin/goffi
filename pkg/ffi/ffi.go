@@ -5,6 +5,7 @@ package ffi
 #cgo windows LDFLAGS: -L../../3rdparty/windows/ffi/lib -lffi
 #cgo !windows pkg-config: libffi
 #include <ffi.h>
+#include <stdint.h>
 extern void closure_caller(ffi_cif* cif, void* ret, void* args, void* user_data);
 */
 import "C"
@@ -194,7 +195,7 @@ func NewClosure(conf ClosureConf, callback func(*ClosureParams), userData []inte
 
 	cls.cfn = usf.Malloc(1, 8)
 	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.ulonglong(usf.Sizeof(C.ffi_closure{})), (*unsafe.Pointer)(cls.cfn)))
+		C.uint64_t(usf.Sizeof(C.ffi_closure{})), (*unsafe.Pointer)(cls.cfn)))
 
 	cls.callback = callback
 	cls.callback_user_data = userData
