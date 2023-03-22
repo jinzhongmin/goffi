@@ -38,6 +38,15 @@ var (
 	ComplexLongdouble Type = &C.ffi_type_complex_longdouble
 )
 
+func Struct(size uint64, alignment uint16, elms []Type) Type {
+	t := (*C.ffi_type)(usf.MallocOf(1, C.ffi_type{}))
+	t.size = C.uint64_t(size)
+	t.alignment = C.ushort(alignment)
+	t._type = C.FFI_TYPE_STRUCT
+	t.elements = (**C.ffi_type)(unsafe.Pointer(&elms[0]))
+	return Type(t)
+}
+
 type Status C.ffi_status
 
 const (
@@ -92,6 +101,7 @@ func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 		ret = output
 	}
 	cif.ret = usf.Malloc(1, uint64(ret.size))
+	usf.Memset(cif.ret, 0, uint64(ret.size))
 
 	st := C.ffi_prep_cif(cif.cif, abi.toC(),
 		C.uint(uint32(inLen)), ret, (**C.ffi_type)(cif.params))
