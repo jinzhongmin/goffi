@@ -84,7 +84,7 @@ func init() {
 
 type Abi C.uint
 
-func (a Abi) ffi_abi() C.ffi_abi {
+func (a Abi) abi() C.ffi_abi {
 	if a == 9999 {
 		panic("bed abi")
 	}

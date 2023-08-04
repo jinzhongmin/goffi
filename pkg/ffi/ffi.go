@@ -86,40 +86,47 @@ type Cif struct {
 	// ret    unsafe.Pointer
 }
 
-// void params
-var _voidParams = []Type{}
+var _zeroCCif = C.ffi_cif{}
+var _zeroCCifSize uint64 = 0
+var _zeroClosure = Closure{}
+var _zeroClosureSize uint64 = 0
+var _zeroCClosure = C.ffi_closure{}
+var _zeroCClosureSize uint64 = 0
+var _voidParams = []Type{}      // void params
+var _voidArgs = []interface{}{} // void args
+var _nilArg = usf.Malloc(1, 8)  // nil arg
+func init() {
+	usf.Memset(_nilArg, 0, 8)
+	_zeroCCifSize = usf.Sizeof(_zeroCCif)
+	_zeroClosureSize = usf.Sizeof(_zeroClosure)
+	_zeroCClosureSize = usf.Sizeof(_zeroCClosure)
+}
 
 func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
-	// if inputs == nil || output == nil {
-	// 	panic("Type cannot be nil")
-	// }
-
 	cif := new(Cif)
-	cifSize := usf.Sizeof(C.ffi_cif{})
-	cif.cif = (*C.ffi_cif)(usf.Malloc(1, cifSize))
-	usf.Memset(unsafe.Pointer(cif.cif), 0, cifSize)
+	cif.cif = (*C.ffi_cif)(usf.Malloc(1, _zeroCCifSize))
+	usf.Memset(unsafe.Pointer(cif.cif), 0, _zeroCCifSize)
 
 	_inputs := inputs
 	if inputs == nil {
 		_inputs = _voidParams
 	}
-	inLen := len(_inputs)
+
+	inLen := uint64(len(_inputs))
 	if inLen > 0 {
-		cif.params = usf.Malloc(uint64(inLen), 8)
-		usf.Memset(cif.params, 0, uint64(inLen)*8)
+		cif.params = usf.Malloc(inLen, 8)
+		usf.Memset(cif.params, 0, inLen*8)
 	}
-	for i := range _inputs {
-		usf.PushAt(cif.params, uint64(i), unsafe.Pointer(_inputs[i]))
+	for i := uint64(0); i < inLen; i++ {
+		usf.PushAt(cif.params, i, unsafe.Pointer(_inputs[i]))
 	}
 
 	retTyp := output
 	if output == nil {
 		retTyp = Void
 	}
-	// cif.ret = usf.Malloc(1, uint64(retTyp.size))
-	// usf.Memset(cif.ret, 0, uint64(retTyp.size))
 
-	st := C.ffi_prep_cif(cif.cif, abi.ffi_abi(),
+	st := C.ffi_prep_cif(cif.cif, abi.abi(),
 		C.uint(inLen), retTyp, (**C.ffi_type)(cif.params))
 
 	err := Status(st).Error()
@@ -130,10 +137,45 @@ func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 
 	return cif, nil
 }
+func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}, ret unsafe.Pointer) {
+	arg := args
+	if args == nil {
+		arg = _voidArgs
+	}
+
+	argc := uint64(len(arg))
+	argv := unsafe.Pointer(nil)
+	argv_free := false
+	if argc > 0 {
+		argv = usf.Malloc(argc, 8)
+		argv_free = true
+
+		src := *(*[]unsafe.Pointer)(usf.Slice(unsafe.Pointer(&args[0]), argc*2))
+		dst := *(*[]unsafe.Pointer)(usf.Slice(argv, argc))
+
+		for i, ii := uint64(0), uint64(1); i < argc; i++ {
+			if arg[i] == nil {
+				dst[i] = _nilArg
+				ii += 2
+				continue
+			}
+			dst[i] = src[ii]
+			ii += 2
+		}
+	}
+
+	C.ffi_call(cif.cif, (*[0]byte)(fn), ret, (*unsafe.Pointer)(argv))
+	if argv_free {
+		usf.Free(argv)
+	}
+}
 func (cif *Cif) Free() {
 	// if cif.ret != nil {
 	// 	usf.Free(cif.ret)
 	// }
+	if cif == nil {
+		return
+	}
 	if cif.params != nil {
 		usf.Free(cif.params)
 	}
@@ -142,119 +184,46 @@ func (cif *Cif) Free() {
 	}
 }
 
-func NewCifRetPtr() unsafe.Pointer {
+func NewZeroPtr() unsafe.Pointer {
 	p := (usf.Malloc(1, 8))
 	usf.Memset(unsafe.Pointer(p), 0, 8)
 	return p
 }
 
-// void args
-var _voidArgs = []interface{}{}
-
-// nil arg
-var _nilArg = usf.Malloc(1, 8)
-
-func init() {
-	usf.Memset(_nilArg, 0, 8)
-}
-
-func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}, returnPtr unsafe.Pointer) {
-	_args := args
-	if args == nil {
-		_args = _voidArgs
-	}
-
-	argc := len(_args)
-	var argv unsafe.Pointer
-	if argc > 0 {
-		argv = usf.Malloc(uint64(argc), 8)
-		// usf.Memset(argv, 0, 8*uint64(argc))
-		defer usf.Free(argv)
-
-		ptrs := *(*[]unsafe.Pointer)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args)*2)))
-		for i := range _args {
-			if _args[i] == nil {
-				usf.PushAt(argv, uint64(i), _nilArg)
-				continue
-			}
-			// lv := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&_args[i])))
-			usf.PushAt(argv, uint64(i), ptrs[i*2+1])
-		}
-	}
-
-	// for i := range _args {
-	// 	if _args[i] == nil {
-	// 		usf.PushAt(argv, uint64(i), _nilArg)
-	// 		continue
-	// 	}
-	// 	lv := (*(*[2]unsafe.Pointer)(unsafe.Pointer(&_args[i])))
-	// 	usf.PushAt(argv, uint64(i), lv[1])
-	// }
-	C.ffi_call(cif.cif, (*[0]byte)(fn), returnPtr, (*unsafe.Pointer)(argv))
-}
-
 type Closure struct {
-	cif                *Cif
-	cfn                unsafe.Pointer
-	closure            *C.ffi_closure
-	callback           func(*ClosureParams)
-	callback_user_data []interface{}
-	callback_data      unsafe.Pointer
-}
+	cif     *Cif
+	cfn     unsafe.Pointer
+	closure *C.ffi_closure
 
-// for NewClosure configure
-type ClosureConf struct {
-	Abi    Abi
-	Inputs []Type
-	Output Type
-}
-
-// for callback call
-type ClosureParams struct {
-	Args     []unsafe.Pointer
-	Return   unsafe.Pointer
-	UserData []interface{}
-}
-type closure_Data struct {
-	callback func(*ClosureParams)
-	argc     int
-	userData *[]interface{}
+	callback      func(args []unsafe.Pointer, ret unsafe.Pointer)
+	callback_argc int
 }
 
 //export closure_caller
 func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
-	data := (*closure_Data)(userData)
-
-	input := new(ClosureParams)
-	input.Args = *(*[]unsafe.Pointer)(usf.Slice(args, uint64(data.argc)))
-	input.Return = ret
-	if data.userData != nil {
-		input.UserData = *data.userData
-	}
-
-	data.callback(input)
+	cls := (*Closure)(userData)
+	cls.callback(*(*[]unsafe.Pointer)(usf.Slice(args, uint64(cls.callback_argc))), ret)
 }
-func NewClosure(conf ClosureConf, callback func(*ClosureParams), userData []interface{}) *Closure {
+func NewClosure(aib Abi, outType Type, inTypes []Type, callback func(args []unsafe.Pointer, ret unsafe.Pointer)) *Closure {
 	var err error
-	cls := new(Closure)
-	cls.cif, err = NewCif(conf.Abi, conf.Output, conf.Inputs)
+	cls := (*Closure)(usf.Malloc(1, _zeroClosureSize))
+	cls.cif, err = NewCif(aib, outType, inTypes)
 	if err != nil {
 		panic(err)
 	}
 
 	cls.cfn = usf.Malloc(1, 8)
 	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.uint64_t(usf.Sizeof(C.ffi_closure{})), (*unsafe.Pointer)(cls.cfn)))
+		C.uint64_t(_zeroCClosureSize), (*unsafe.Pointer)(cls.cfn)))
 
 	cls.callback = callback
-	cls.callback_user_data = userData
-	cls.callback_data = (usf.MallocOf(1, closure_Data{}))
-	(*closure_Data)(cls.callback_data).callback = callback
-	(*closure_Data)(cls.callback_data).argc = len(conf.Inputs)
-	(*closure_Data)(cls.callback_data).userData = &cls.callback_user_data
+	cls.callback_argc = 0
+	if inTypes != nil {
+		cls.callback_argc = len(inTypes)
+	}
 
 	C.ffi_prep_closure_loc(cls.closure, cls.cif.cif,
-		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls.callback_data), usf.Pop(cls.cfn))
+		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls), usf.Pop(cls.cfn))
 	return cls
 }
 func (cls *Closure) Call(args []interface{}, ret unsafe.Pointer) {
@@ -264,13 +233,11 @@ func (cls *Closure) Cfn() unsafe.Pointer {
 	return (*(*[1]unsafe.Pointer)(cls.cfn))[0]
 }
 func (cls *Closure) Free() {
+	if cls == nil {
+		return
+	}
 	if cls.closure != nil {
 		C.ffi_closure_free(unsafe.Pointer(cls.closure))
-	}
-	if cls.callback_data != nil {
-		(*closure_Data)(cls.callback_data).callback = nil
-		(*closure_Data)(cls.callback_data).userData = nil
-		usf.Free(cls.callback_data)
 	}
 	if cls.cfn != nil {
 		usf.Free(cls.cfn)
@@ -278,10 +245,8 @@ func (cls *Closure) Free() {
 	if cls.callback != nil {
 		cls.callback = nil
 	}
-	if cls.callback_user_data != nil {
-		cls.callback_user_data = nil
-	}
 	if cls.cif != nil {
 		cls.cif.Free()
 	}
+	usf.Free(unsafe.Pointer(cls))
 }

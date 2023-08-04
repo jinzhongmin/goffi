@@ -1,5 +1,3 @@
-github.com/jinzhongmin/dlfcn v0.0.0-20230320064349-c21ff9310ade h1:HsLyaKlPdTIfMeuI29VKjOrkIMS51p6DEvlk4JI5CmM=
-github.com/jinzhongmin/dlfcn v0.0.0-20230320064349-c21ff9310ade/go.mod h1:LKZTl0lyFVqu8rLhETZU6MB3Vtpzkowtcy3NA5RbcyM=
 github.com/jinzhongmin/usf v0.0.0-20230320062830-91195fedb649 h1:Z6SV1JHuvjuRA67FtjIGgNH6fvr4LwYlYwqxTanuUK4=
 github.com/jinzhongmin/usf v0.0.0-20230320062830-91195fedb649/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=
 golang.org/x/text v0.8.0 h1:57P1ETyNKtuIjB4SRd15iJxuhj8Gc416Y78H3qgMh68=
