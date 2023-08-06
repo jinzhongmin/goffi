@@ -153,6 +153,7 @@ func (v *Value) SetI64(val int64)          { (*(*[1]int64)(v.p))[0] = val }
 func (v *Value) SetF32(val float32)        { (*(*[1]float32)(v.p))[0] = val }
 func (v *Value) SetF64(val float64)        { (*(*[1]float64)(v.p))[0] = val }
 
+func Free(p unsafe.Pointer)         { usf.Free(p) }
 func CStr(s string) unsafe.Pointer  { return unsafe.Pointer(C.CString(s)) }
 func GoStr(p unsafe.Pointer) string { return C.GoString((*C.char)(p)) }
 func CBool(v bool) int32 {
@@ -162,6 +163,32 @@ func CBool(v bool) int32 {
 	return 0
 }
 func GoBool(v int32) bool { return v == 1 }
+
+type CStrs []unsafe.Pointer
+
+func NewCStrs(strs []string) CStrs {
+	l := len(strs)
+	p := usf.Malloc(uint64(l), 8)
+	css := *(*[]unsafe.Pointer)(usf.Slice(p, uint64(l)))
+	for i := range strs {
+		css[i] = CStr(strs[i])
+	}
+	return CStrs(css)
+}
+func (css CStrs) Ptr() unsafe.Pointer {
+	return unsafe.Pointer(&css[0])
+}
+func (css CStrs) Free() {
+	for i := range css {
+		usf.Free(css[i])
+	}
+	usf.Free(unsafe.Pointer(&css[0]))
+}
+func (css CStrs) Set(i int, str string) { css[i] = CStr(str) }
+func (css CStrs) FreeSet(i int, str string) {
+	Free(css[i])
+	css[i] = CStr(str)
+}
 
 type fn struct {
 	ptr unsafe.Pointer
@@ -389,16 +416,23 @@ type Fn struct {
 }
 
 func NewFn(abi Abi, outType Type, inTypes []Type, relFn func(args []Value, ret Value)) *Fn {
-	cls := ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)),
+	fn := new(Fn)
+	fn.fn = relFn
+	fn.cls = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)),
 		func(args []unsafe.Pointer, ret unsafe.Pointer) {
+			if fn == nil || fn.fn == nil {
+				return
+			}
 			_args := *(*[]Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
-			relFn(_args, Value{ret})
+			fn.fn(_args, Value{ret})
 		})
-	return &Fn{cls: cls, fn: relFn}
+	return fn
 }
-func (f *Fn) Cptr() unsafe.Pointer { return f.cls.Cfn() }
+func (f *Fn) Rebind(fn func(args []Value, ret Value)) { f.fn = fn }
+func (f *Fn) Cptr() unsafe.Pointer                    { return f.cls.Cfn() }
 func (f *Fn) Free() {
 	if f != nil {
+		f.fn = nil
 		f.cls.Free()
 	}
 }
