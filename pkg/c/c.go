@@ -19,10 +19,12 @@ const (
 	ModeLazy   LibMode = LibMode(dlfcn.RTLDLazy)
 	ModeGlobal LibMode = LibMode(dlfcn.RTLDGlobal)
 	ModeLocal  LibMode = LibMode(dlfcn.RTLDLocal)
+
+	CNilStr string = "\r\n\n\r\000\n\r\n\r\000\t\a"
 )
 
 var (
-	_retVoid = ffi.NewZeroPtr() // public return value ptr
+	_retVoid = ffi.NewPtr() // public return value ptr
 
 	AbiDefault  Abi = Abi(ffi.AbiDefault)
 	AbiFirst    Abi = Abi(ffi.AbiFirst)
@@ -65,96 +67,13 @@ func TypeStruct(size uint64, alignment uint16, elms []Type) Type {
 	return Type(ffi.Struct(size, alignment, *(*[]ffi.Type)(unsafe.Pointer(&elms))))
 }
 
-type Value struct {
-	p unsafe.Pointer
-}
-
-func NewVal(p unsafe.Pointer) *Value { return &Value{p} }
-func (v *Value) Free() {
-	if v != nil && v.p != nil {
-		usf.Free(v.p)
-		v.p = nil
+func Free(p unsafe.Pointer) { usf.Free(p) }
+func CStr(s string) unsafe.Pointer {
+	if s == CNilStr {
+		return nil
 	}
+	return unsafe.Pointer(C.CString(s))
 }
-func (v *Value) Ptr() unsafe.Pointer { return (*(*[1]unsafe.Pointer)(v.p))[0] }
-func (v *Value) Bool() bool          { return v.I32() != 0 }
-func (v *Value) U8() uint8           { return (*(*[1]uint8)(v.p))[0] }
-func (v *Value) I8() int8            { return (*(*[1]int8)(v.p))[0] }
-func (v *Value) U16() uint16         { return (*(*[1]uint16)(v.p))[0] }
-func (v *Value) I16() int16          { return (*(*[1]int16)(v.p))[0] }
-func (v *Value) U32() uint32         { return (*(*[1]uint32)(v.p))[0] }
-func (v *Value) I32() int32          { return (*(*[1]int32)(v.p))[0] }
-func (v *Value) U64() uint64         { return (*(*[1]uint64)(v.p))[0] }
-func (v *Value) I64() int64          { return (*(*[1]int64)(v.p))[0] }
-func (v *Value) F32() float32        { return (*(*[1]float32)(v.p))[0] }
-func (v *Value) F64() float64        { return (*(*[1]float64)(v.p))[0] }
-func (v *Value) Str() string         { return GoStr(v.Ptr()) }
-func (v *Value) PtrFree() unsafe.Pointer {
-	defer v.Free()
-	return (*(*[1]unsafe.Pointer)(v.p))[0]
-}
-func (v *Value) BoolFree() bool {
-	defer v.Free()
-	return v.I32Free() != 0
-}
-func (v *Value) U8Free() uint8 {
-	defer v.Free()
-	return (*(*[1]uint8)(v.p))[0]
-}
-func (v *Value) I8Free() int8 {
-	defer v.Free()
-	return (*(*[1]int8)(v.p))[0]
-}
-func (v *Value) U16Free() uint16 {
-	defer v.Free()
-	return (*(*[1]uint16)(v.p))[0]
-}
-func (v *Value) I16Free() int16 {
-	defer v.Free()
-	return (*(*[1]int16)(v.p))[0]
-}
-func (v *Value) U32Free() uint32 {
-	defer v.Free()
-	return (*(*[1]uint32)(v.p))[0]
-}
-func (v *Value) I32Free() int32 {
-	defer v.Free()
-	return (*(*[1]int32)(v.p))[0]
-}
-func (v *Value) U64Free() uint64 {
-	defer v.Free()
-	return (*(*[1]uint64)(v.p))[0]
-}
-func (v *Value) I64Free() int64 {
-	defer v.Free()
-	return (*(*[1]int64)(v.p))[0]
-}
-func (v *Value) F32Free() float32 {
-	defer v.Free()
-	return (*(*[1]float32)(v.p))[0]
-}
-func (v *Value) F64Free() float64 {
-	defer v.Free()
-	return (*(*[1]float64)(v.p))[0]
-}
-func (v *Value) StrFree() string {
-	defer v.Free()
-	return GoStr(v.PtrFree())
-}
-func (v *Value) SetPtr(val unsafe.Pointer) { (*(*[1]unsafe.Pointer)(v.p))[0] = val }
-func (v *Value) SetU8(val uint8)           { (*(*[1]uint8)(v.p))[0] = val }
-func (v *Value) SetI8(val int8)            { (*(*[1]int8)(v.p))[0] = val }
-func (v *Value) SetU16(val uint16)         { (*(*[1]uint16)(v.p))[0] = val }
-func (v *Value) SetI16(val int16)          { (*(*[1]int16)(v.p))[0] = val }
-func (v *Value) SetU32(val uint32)         { (*(*[1]uint32)(v.p))[0] = val }
-func (v *Value) SetI32(val int32)          { (*(*[1]int32)(v.p))[0] = val }
-func (v *Value) SetU64(val uint64)         { (*(*[1]uint64)(v.p))[0] = val }
-func (v *Value) SetI64(val int64)          { (*(*[1]int64)(v.p))[0] = val }
-func (v *Value) SetF32(val float32)        { (*(*[1]float32)(v.p))[0] = val }
-func (v *Value) SetF64(val float64)        { (*(*[1]float64)(v.p))[0] = val }
-
-func Free(p unsafe.Pointer)         { usf.Free(p) }
-func CStr(s string) unsafe.Pointer  { return unsafe.Pointer(C.CString(s)) }
 func GoStr(p unsafe.Pointer) string { return C.GoString((*C.char)(p)) }
 func CBool(v bool) int32 {
 	if v {
@@ -168,7 +87,7 @@ type CStrs []unsafe.Pointer
 
 func NewCStrs(strs []string) CStrs {
 	l := len(strs)
-	p := usf.Malloc(uint64(l), 8)
+	p := usf.MallocN(uint64(l), 8)
 	css := *(*[]unsafe.Pointer)(usf.Slice(p, uint64(l)))
 	for i := range strs {
 		css[i] = CStr(strs[i])
@@ -190,179 +109,57 @@ func (css CStrs) FreeSet(i int, str string) {
 	css[i] = CStr(str)
 }
 
-type fn struct {
-	ptr unsafe.Pointer
-	cif *ffi.Cif
-}
+type (
+	prototypes []*prototype
+	prototype  struct {
+		cif     *ffi.Cif
+		outType Type
+		inTypes []Type
+	}
+)
 
-type prototype struct {
-	cif     *ffi.Cif
-	outType Type
-	inTypes []Type
-}
-
-func (prop prototype) same(outType Type, inTypes []Type) bool {
-	if prop.outType != outType || len(prop.inTypes) != len(inTypes) {
+func (protp prototype) same(outType Type, inTypes []Type) bool {
+	if protp.outType != outType || len(protp.inTypes) != len(inTypes) {
 		return false
 	}
-	for i := range prop.inTypes {
-		if prop.inTypes[i] != inTypes[i] {
+	for i := range protp.inTypes {
+		if protp.inTypes[i] != inTypes[i] {
 			return false
 		}
 	}
 	return true
 }
 
-type Lib struct {
-	handle *dlfcn.Handle
-
-	props     []*prototype
-	cacheFlag bool
-	cache     map[string]*fn
-	cachePtr  map[unsafe.Pointer]*fn
-}
-
-func newLib(handle *dlfcn.Handle, cacheEnable bool) *Lib {
-	var props []*prototype = nil
-	var cache map[string]*fn = nil
-	var cachePtr map[unsafe.Pointer]*fn = nil
-	if cacheEnable {
-		props = make([]*prototype, 0)
-		cache = make(map[string]*fn)
-		cachePtr = make(map[unsafe.Pointer]*fn)
-	}
-
-	return &Lib{handle: handle, cacheFlag: cacheEnable, props: props, cache: cache, cachePtr: cachePtr}
-}
-
-// init lib by shared library,libpath look like ./libxxx.dll
-func NewLib(libpath string, mod LibMode, cacheEnable bool) (*Lib, error) {
-	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
-	if err != nil {
-		return nil, errors.Join(errors.New("load lib error"), err)
-	}
-
-	return newLib(l, cacheEnable), nil
-}
-
-// init lib by other inited library
-func NewLibFrom(lib *Lib, cacheEnable bool) *Lib {
-	return newLib(lib.handle, cacheEnable)
-}
-
-func (lib *Lib) checkPrototype(outType Type, inTypes []Type) *prototype {
-	for i := range lib.props {
-		if lib.props[i].same(outType, inTypes) {
-			return lib.props[i]
+func (protps prototypes) lookup(outType Type, inTypes []Type) *prototype {
+	for i := range protps {
+		if protps[i].same(outType, inTypes) {
+			return protps[i]
 		}
 	}
 	return nil
 }
 
-func (lib *Lib) Symbol(fn string) (unsafe.Pointer, error) {
-	return lib.handle.Symbol(fn)
+type Lib struct {
+	prototypes prototypes
+	handle     *dlfcn.Handle
 }
 
-func (lib *Lib) CallSymbolPtr(symbolPtr unsafe.Pointer, outType Type, inTypes []Type, args []interface{}) *Value {
-	if lib.cacheFlag {
-		if fn, ok := lib.cachePtr[symbolPtr]; ok {
-			if outType == Void {
-				fn.cif.Call(symbolPtr, args, nil)
-				return nil
-			}
-
-			ret := ffi.NewZeroPtr()
-			fn.cif.Call(symbolPtr, args, ret)
-			return &Value{ret}
-		}
-	}
-
-	if lib.cacheFlag {
-		if prop := lib.checkPrototype(outType, inTypes); prop != nil {
-			fn := &fn{
-				ptr: symbolPtr,
-				cif: prop.cif,
-			}
-			lib.cachePtr[symbolPtr] = fn
-
-			if outType == Void {
-				fn.cif.Call(fn.ptr, args, nil)
-				return nil
-			}
-
-			ret := ffi.NewZeroPtr()
-			fn.cif.Call(fn.ptr, args, ret)
-			return &Value{ret}
-		}
-	}
-
-	//create cif
-	cif, err := ffi.NewCif(ffi.AbiDefault, ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)))
+func NewLib(libpath string, mod LibMode) (*Lib, error) {
+	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
 	if err != nil {
-		panic(err)
+		return nil, errors.Join(errors.New("load lib error"), err)
 	}
-
-	if lib.cacheFlag {
-		fn := &fn{
-			ptr: symbolPtr,
-			cif: cif,
-		}
-		lib.cachePtr[symbolPtr] = fn
-		lib.props = append(lib.props,
-			&prototype{outType: outType, inTypes: inTypes, cif: cif})
-	} else {
-		cif.Free()
-	}
-
-	if outType == Void {
-		cif.Call(symbolPtr, args, nil)
-		return nil
-	}
-
-	ret := ffi.NewZeroPtr()
-	cif.Call(symbolPtr, args, ret)
-	return &Value{unsafe.Pointer(ret)}
+	return &Lib{handle: l, prototypes: make([]*prototype, 0)}, nil
 }
 
-func (lib *Lib) Call(symbol string, outType Type, inTypes []Type, args []interface{}) *Value {
+func NewLibFrom(lib *Lib) *Lib {
+	return &Lib{handle: lib.handle, prototypes: make([]*prototype, 0)}
+}
 
-	//cache and has, call and return
-	if lib.cacheFlag {
-		if fn, ok := lib.cache[symbol]; ok {
-			if outType == Void {
-				fn.cif.Call(fn.ptr, args, nil)
-				return nil
-			}
-
-			ret := ffi.NewZeroPtr()
-			fn.cif.Call(fn.ptr, args, ret)
-			return &Value{ret}
-		}
-	}
-
-	//load symbol
-	ptr, err := lib.Symbol(symbol)
-	if err != nil {
-		panic(err)
-	}
-
-	if lib.cacheFlag {
-		if prop := lib.checkPrototype(outType, inTypes); prop != nil {
-			fn := &fn{
-				ptr: ptr,
-				cif: prop.cif,
-			}
-			lib.cache[symbol] = fn
-
-			if outType == Void {
-				fn.cif.Call(fn.ptr, args, nil)
-				return nil
-			}
-
-			ret := ffi.NewZeroPtr()
-			fn.cif.Call(fn.ptr, args, ret)
-			return &Value{ret}
-		}
+func (lib *Lib) lookup(outType Type, inTypes []Type) *prototype {
+	protp := lib.prototypes.lookup(outType, inTypes)
+	if protp != nil {
+		return protp
 	}
 
 	cif, err := ffi.NewCif(ffi.AbiDefault, ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)))
@@ -370,69 +167,162 @@ func (lib *Lib) Call(symbol string, outType Type, inTypes []Type, args []interfa
 		panic(err)
 	}
 
-	if lib.cacheFlag {
-		fn := &fn{
-			ptr: ptr,
-			cif: cif,
-		}
-		lib.cache[symbol] = fn
-		lib.props = append(lib.props,
-			&prototype{outType: outType, inTypes: inTypes, cif: cif})
-	} else {
-		cif.Free()
+	protp = &prototype{
+		cif:     cif,
+		outType: outType,
+		inTypes: inTypes,
 	}
+	lib.prototypes = append(lib.prototypes, protp)
 
-	if outType == Void {
-		cif.Call(ptr, args, nil)
-		return nil
-	}
-
-	ret := ffi.NewZeroPtr()
-	cif.Call(ptr, args, ret)
-	return &Value{ret}
+	return protp
 }
-
-func Call(ptr unsafe.Pointer, outType Type, inTypes []Type, args []interface{}) *Value {
-	cif, err := ffi.NewCif(ffi.AbiDefault, ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)))
+func (lib *Lib) Symbol(fn string) unsafe.Pointer {
+	p, err := lib.handle.Symbol(fn)
 	if err != nil {
 		panic(err)
 	}
+	return p
+}
+func (lib *Lib) Call(fp *FuncPrototype, args []interface{}) *Value {
+	if fp.complete {
+		if fp.OutType == Void {
+			fp.Cif.Call(fp.Ptr, args, nil)
+			return nil
+		}
 
-	if outType == Void {
-		cif.Call(ptr, args, nil)
-		cif.Free()
+		ret := usf.Malloc(8)
+		retV := (*Value)(ret)
+		retV.v = nil
+		fp.Cif.Call(fp.Ptr, args, ret)
+		return retV
+	}
+
+	if fp.Ptr == nil {
+		fp.Ptr = lib.Symbol(fp.Name)
+	}
+	if fp.Cif == nil {
+		protp := lib.lookup(fp.OutType, fp.InTypes)
+		fp.Cif = protp.cif
+	}
+	fp.complete = true
+
+	if fp.OutType == Void {
+		fp.Cif.Call(fp.Ptr, args, nil)
 		return nil
 	}
 
-	ret := ffi.NewZeroPtr()
-	cif.Call(ptr, args, ret)
-	cif.Free()
-	return &Value{ret}
+	ret := usf.Malloc(8)
+	retV := (*Value)(ret)
+	retV.v = nil
+	fp.Cif.Call(fp.Ptr, args, ret)
+	return retV
 }
 
-type Fn struct {
-	cls *ffi.Closure
-	fn  func(args []Value, ret Value)
+type FuncPrototype struct {
+	Name    string //func name in C
+	OutType Type   //return type int C
+	InTypes []Type //params type int C
+
+	Ptr unsafe.Pointer //dlfcn func pointer
+	Cif *ffi.Cif       //cif
+
+	complete bool //mean this strucr is complete
 }
 
-func NewFn(abi Abi, outType Type, inTypes []Type, relFn func(args []Value, ret Value)) *Fn {
-	fn := new(Fn)
-	fn.fn = relFn
-	fn.cls = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)),
+// dlsym:dlfcn.DlsymDefault|dlfcn.DlsymNext|dlfcn.Handle.Ptr()
+func (fp *FuncPrototype) Create(dlsym unsafe.Pointer) (err error) {
+	if fp.Ptr == nil {
+		fp.Ptr, err = dlfcn.Dlsym(dlsym, fp.Name)
+		if err != nil {
+			return
+		}
+	}
+	if fp.Cif == nil {
+		fp.Cif, err = ffi.NewCif(ffi.AbiDefault, ffi.Type(fp.OutType),
+			*(*[]ffi.Type)(unsafe.Pointer(&fp.InTypes)))
+		if err != nil {
+			return
+		}
+	}
+	fp.complete = true
+
+	return
+}
+func (fp *FuncPrototype) Free() {
+	if fp != nil && fp.Cif != nil {
+		fp.Cif.Free()
+	}
+}
+func (fp *FuncPrototype) Call(args []interface{}) *Value {
+	if fp.OutType == Void {
+		fp.Cif.Call(fp.Ptr, args, nil)
+		return nil
+	}
+
+	ret := usf.Malloc(8)
+	retV := (*Value)(ret)
+	retV.v = nil
+	fp.Cif.Call(fp.Ptr, args, ret)
+	return retV
+}
+
+type Value struct{ v unsafe.Pointer }
+
+func (v *Value) Free()                   { usf.Free(unsafe.Pointer(v)) }
+func (v *Value) U8() uint8               { return *(*uint8)(unsafe.Pointer(v)) }
+func (v *Value) I8() int8                { return *(*int8)(unsafe.Pointer(v)) }
+func (v *Value) U16() uint16             { return *(*uint16)(unsafe.Pointer(v)) }
+func (v *Value) I16() int16              { return *(*int16)(unsafe.Pointer(v)) }
+func (v *Value) U32() uint32             { return *(*uint32)(unsafe.Pointer(v)) }
+func (v *Value) I32() int32              { return *(*int32)(unsafe.Pointer(v)) }
+func (v *Value) U64() uint64             { return *(*uint64)(unsafe.Pointer(v)) }
+func (v *Value) I64() int64              { return *(*int64)(unsafe.Pointer(v)) }
+func (v *Value) F32() float32            { return *(*float32)(unsafe.Pointer(v)) }
+func (v *Value) F64() float64            { return *(*float64)(unsafe.Pointer(v)) }
+func (v *Value) Ptr() unsafe.Pointer     { return v.v }
+func (v *Value) Str() string             { return GoStr(v.Ptr()) }
+func (v *Value) Bool() bool              { return v.I32() != 0 }
+func (v *Value) U8Free() uint8           { defer v.Free(); return *(*uint8)(unsafe.Pointer(v)) }
+func (v *Value) I8Free() int8            { defer v.Free(); return *(*int8)(unsafe.Pointer(v)) }
+func (v *Value) U16Free() uint16         { defer v.Free(); return *(*uint16)(unsafe.Pointer(v)) }
+func (v *Value) I16Free() int16          { defer v.Free(); return *(*int16)(unsafe.Pointer(v)) }
+func (v *Value) U32Free() uint32         { defer v.Free(); return *(*uint32)(unsafe.Pointer(v)) }
+func (v *Value) I32Free() int32          { defer v.Free(); return *(*int32)(unsafe.Pointer(v)) }
+func (v *Value) U64Free() uint64         { defer v.Free(); return *(*uint64)(unsafe.Pointer(v)) }
+func (v *Value) I64Free() int64          { defer v.Free(); return *(*int64)(unsafe.Pointer(v)) }
+func (v *Value) F32Free() float32        { defer v.Free(); return *(*float32)(unsafe.Pointer(v)) }
+func (v *Value) F64Free() float64        { defer v.Free(); return *(*float64)(unsafe.Pointer(v)) }
+func (v *Value) PtrFree() unsafe.Pointer { defer v.Free(); return v.v }
+func (v *Value) StrFree() string         { defer v.Free(); return GoStr(v.Ptr()) }
+func (v *Value) BoolFree() bool          { return v.I32Free() != 0 }
+func (v *Value) SetU8(i uint8)           { *(*uint8)(unsafe.Pointer(v)) = i }
+func (v *Value) SetI8(i int8)            { *(*int8)(unsafe.Pointer(v)) = i }
+func (v *Value) SetU16(i uint16)         { *(*uint16)(unsafe.Pointer(v)) = i }
+func (v *Value) SetI16(i int16)          { *(*int16)(unsafe.Pointer(v)) = i }
+func (v *Value) SetU32(i uint32)         { *(*uint32)(unsafe.Pointer(v)) = i }
+func (v *Value) SetI32(i int32)          { *(*int32)(unsafe.Pointer(v)) = i }
+func (v *Value) SetU64(i uint64)         { *(*uint64)(unsafe.Pointer(v)) = i }
+func (v *Value) SetI64(i int64)          { *(*int64)(unsafe.Pointer(v)) = i }
+func (v *Value) SetF32(i float32)        { *(*float32)(unsafe.Pointer(v)) = i }
+func (v *Value) SetF64(i float64)        { *(*float64)(unsafe.Pointer(v)) = i }
+func (v *Value) SetPtr(i unsafe.Pointer) { v.v = i }
+
+type Callback struct {
+	*ffi.Closure
+	//Converts the input and output variables to their real types and calls CallbackFunc
+	CallbackCvt  func(callback *Callback, args []*Value, ret *Value)
+	CallbackFunc interface{}
+}
+
+func NewCallback(abi Abi, outType Type, inTypes []Type) *Callback {
+	cb := new(Callback)
+	cb.Closure = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)),
 		func(args []unsafe.Pointer, ret unsafe.Pointer) {
-			if fn == nil || fn.fn == nil {
+			if cb.CallbackCvt == nil {
 				return
 			}
-			_args := *(*[]Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
-			fn.fn(_args, Value{ret})
+			_args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
+			cb.CallbackCvt(cb, _args, (*Value)(ret))
 		})
-	return fn
-}
-func (f *Fn) Rebind(fn func(args []Value, ret Value)) { f.fn = fn }
-func (f *Fn) Cptr() unsafe.Pointer                    { return f.cls.Cfn() }
-func (f *Fn) Free() {
-	if f != nil {
-		f.fn = nil
-		f.cls.Free()
-	}
+	return cb
 }

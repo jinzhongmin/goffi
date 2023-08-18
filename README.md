@@ -18,9 +18,16 @@ pacman -S mingw-w64-x86_64-libffi
 ``` go
 package main
 
+/*
+typedef int (*opera_fn)(int ,int);
+int opera(void* fn, int a, int b){
+	opera_fn f = (opera_fn)(fn);
+	return f(a, b);
+}
+*/
+import "C"
 import (
 	"fmt"
-	"time"
 
 	"github.com/jinzhongmin/goffi/pkg/c"
 	"github.com/jinzhongmin/goffi/pkg/dlfcn"
@@ -32,45 +39,57 @@ func main() {
 	//###################
 	// hello world.
 	//###################
-	printf, _ := dlfcn.Dlsym(dlfcn.DlsymDefault, "printf")
-
 	str := c.CStr("hello %s .\n")
 	defer usf.Free(str)
 
 	world := c.CStr("world")
 	defer usf.Free(world)
 
-	c.Call(printf, c.Void, []c.Type{c.Pointer, c.Pointer}, // function prototype
-		[]interface{}{&str, &world}) //args
+	fnPrototype := &c.FuncPrototype{
+		Name:    "printf",
+		InTypes: []c.Type{c.Pointer, c.Pointer},
+		OutType: c.Void,
+	}
+	fnPrototype.Create(dlfcn.DlsymDefault)
+	fnPrototype.Call([]interface{}{&str, &world})
 
 	//###################
 	// callback
 	//###################
 
-	signal, _ := dlfcn.Dlsym(dlfcn.DlsymDefault, "signal") //#signal from <signal.h>
+	//define callback prototype
+	opera_func := c.NewCallback(c.AbiDefault, c.I32, []c.Type{c.I32, c.I32})
 
-	callback := c.NewFn(c.AbiDefault, c.Void, []c.Type{c.I32}, //definition function prototype
-
-		func(args []c.Val, ret *c.Val) { //real function call
-			sigIntCode := args[0].I32()
-			fmt.Println("I've been called. code is: ", sigIntCode)
-		})
-
-	defer callback.Free() //need free
-
-	SIGINT := int32(2) //from <signal.h>
-	callback_cptr := callback.Cptr() //real c function pointer
-
-	//Call signal and register the callback function
-	c.Call(signal, c.Void, []c.Type{c.I32, c.Pointer},
-		[]interface{}{&SIGINT, &callback_cptr})
-
-	fmt.Println("input ctrl+c, will callback")
-
-	for {
-		fmt.Println("wait ctrl+c")
-		time.Sleep(time.Second)
+	//opera_func is base goffi.Closure
+	//CallbackCvt wrap from goffi.Closure.Callback
+	//CallbackCvt for convert goffi.Closure.Callback to real func CallbackFunc
+	opera_func.CallbackCvt = func(callback *c.Callback, args []*c.Value, ret *c.Value) {
+		fn, ok := callback.CallbackFunc.(func(int32, int32) int32)
+		if ok {
+			a := args[0].I32()
+			b := args[1].I32()
+			ret.SetI32(fn(a, b))
+		}
 	}
+
+	a := C.int(100)
+	b := C.int(200)
+
+	//define opera_func to add
+	//call path, call goffi.Closure.Callback -> call CallbackCvt -> call CallbackFunc
+	opera_func.CallbackFunc = func(a int32, b int32) int32 {
+		return a + b
+	}
+	add := C.opera(opera_func.Cfunc, a, b)
+	fmt.Println("a + b = ", add)
+
+	//change opera_func to mul
+	opera_func.CallbackFunc = func(a int32, b int32) int32 {
+		return a * b
+	}
+	mul := C.opera(opera_func.Cfunc, a, b)
+	fmt.Println("a * b = ", mul)
+
 }
 
 ```

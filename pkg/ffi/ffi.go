@@ -49,7 +49,7 @@ func Struct(size uint64, alignment uint16, elms []Type) Type {
 	t.alignment = C.ushort(alignment)
 	t._type = C.FFI_TYPE_STRUCT
 
-	typs := usf.Malloc(uint64(len(elms)), 8)
+	typs := usf.MallocN(uint64(len(elms)), 8)
 	copy(*(*[]Type)(usf.Slice(typs, uint64(len(elms)))), elms) //copy elms to typs
 
 	t.elements = (**C.ffi_type)(typs)
@@ -94,17 +94,17 @@ var _zeroCClosure = C.ffi_closure{}
 var _zeroCClosureSize uint64 = 0
 var _voidParams = []Type{}      // void params
 var _voidArgs = []interface{}{} // void args
-var _nilArg = usf.Malloc(1, 8)  // nil arg
+var _nilArg = usf.MallocN(1, 8) // nil arg
 func init() {
 	usf.Memset(_nilArg, 0, 8)
-	_zeroCCifSize = usf.Sizeof(_zeroCCif)
-	_zeroClosureSize = usf.Sizeof(_zeroClosure)
-	_zeroCClosureSize = usf.Sizeof(_zeroCClosure)
+	_zeroCCifSize = usf.SizeOf(_zeroCCif)
+	_zeroClosureSize = usf.SizeOf(_zeroClosure)
+	_zeroCClosureSize = usf.SizeOf(_zeroCClosure)
 }
 
 func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 	cif := new(Cif)
-	cif.cif = (*C.ffi_cif)(usf.Malloc(1, _zeroCCifSize))
+	cif.cif = (*C.ffi_cif)(usf.MallocN(1, _zeroCCifSize))
 	usf.Memset(unsafe.Pointer(cif.cif), 0, _zeroCCifSize)
 
 	_inputs := inputs
@@ -114,7 +114,7 @@ func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 
 	inLen := uint64(len(_inputs))
 	if inLen > 0 {
-		cif.params = usf.Malloc(inLen, 8)
+		cif.params = usf.MallocN(inLen, 8)
 		usf.Memset(cif.params, 0, inLen*8)
 	}
 	for i := uint64(0); i < inLen; i++ {
@@ -147,7 +147,7 @@ func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}, ret unsafe.Pointer) 
 	argv := unsafe.Pointer(nil)
 	argv_free := false
 	if argc > 0 {
-		argv = usf.Malloc(argc, 8)
+		argv = usf.MallocN(argc, 8)
 		argv_free = true
 
 		src := *(*[]unsafe.Pointer)(usf.Slice(unsafe.Pointer(&args[0]), argc*2))
@@ -184,53 +184,53 @@ func (cif *Cif) Free() {
 	}
 }
 
-func NewZeroPtr() unsafe.Pointer {
-	p := (usf.Malloc(1, 8))
+func NewPtr() unsafe.Pointer {
+	p := (usf.MallocN(1, 8))
 	usf.Memset(unsafe.Pointer(p), 0, 8)
 	return p
 }
 
 type Closure struct {
+	Cfunc   unsafe.Pointer
 	cif     *Cif
-	cfn     unsafe.Pointer
 	closure *C.ffi_closure
 
-	callback      func(args []unsafe.Pointer, ret unsafe.Pointer)
+	Callback      func(args []unsafe.Pointer, ret unsafe.Pointer)
 	callback_argc int
 }
 
 //export closure_caller
 func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
 	cls := (*Closure)(userData)
-	cls.callback(*(*[]unsafe.Pointer)(usf.Slice(args, uint64(cls.callback_argc))), ret)
+	cls.Callback(*(*[]unsafe.Pointer)(usf.Slice(args, uint64(cls.callback_argc))), ret)
 }
 func NewClosure(aib Abi, outType Type, inTypes []Type, callback func(args []unsafe.Pointer, ret unsafe.Pointer)) *Closure {
 	var err error
-	cls := (*Closure)(usf.Malloc(1, _zeroClosureSize))
+	cls := (*Closure)(usf.MallocN(1, _zeroClosureSize))
 	cls.cif, err = NewCif(aib, outType, inTypes)
 	if err != nil {
 		panic(err)
 	}
 
-	cls.cfn = usf.Malloc(1, 8)
+	cfn := usf.MallocN(1, 8)
 	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.uint64_t(_zeroCClosureSize), (*unsafe.Pointer)(cls.cfn)))
+		C.uint64_t(_zeroCClosureSize), (*unsafe.Pointer)(cfn)))
 
-	cls.callback = callback
+	cls.Cfunc = usf.Pop(cfn)
+	usf.Free(cfn)
+
+	cls.Callback = callback
 	cls.callback_argc = 0
 	if inTypes != nil {
 		cls.callback_argc = len(inTypes)
 	}
 
 	C.ffi_prep_closure_loc(cls.closure, cls.cif.cif,
-		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls), usf.Pop(cls.cfn))
+		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls), cls.Cfunc)
 	return cls
 }
 func (cls *Closure) Call(args []interface{}, ret unsafe.Pointer) {
-	cls.cif.Call(usf.Pop(cls.cfn), args, ret)
-}
-func (cls *Closure) Cfn() unsafe.Pointer {
-	return (*(*[1]unsafe.Pointer)(cls.cfn))[0]
+	cls.cif.Call(cls.Cfunc, args, ret)
 }
 func (cls *Closure) Free() {
 	if cls == nil {
@@ -239,11 +239,11 @@ func (cls *Closure) Free() {
 	if cls.closure != nil {
 		C.ffi_closure_free(unsafe.Pointer(cls.closure))
 	}
-	if cls.cfn != nil {
-		usf.Free(cls.cfn)
+	if cls.Cfunc != nil {
+		usf.Free(cls.Cfunc)
 	}
-	if cls.callback != nil {
-		cls.callback = nil
+	if cls.Callback != nil {
+		cls.Callback = nil
 	}
 	if cls.cif != nil {
 		cls.cif.Free()

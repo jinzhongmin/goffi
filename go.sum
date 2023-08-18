@@ -1,4 +1,8 @@
 github.com/jinzhongmin/usf v0.0.0-20230320062830-91195fedb649 h1:Z6SV1JHuvjuRA67FtjIGgNH6fvr4LwYlYwqxTanuUK4=
 github.com/jinzhongmin/usf v0.0.0-20230320062830-91195fedb649/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=
+github.com/jinzhongmin/usf v0.0.0-20230804090457-c1be00ca2221 h1:2GwpWZKO2bG+MdCuFxBUWxJuOBRF0548OXal56qDIJw=
+github.com/jinzhongmin/usf v0.0.0-20230804090457-c1be00ca2221/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=
+github.com/jinzhongmin/usf v0.0.0-20230818115909-72f118b9d216 h1:YYHEsbD58aDjrVQIHtVFceHg1tHB3nHAh2R0Bsst0Yw=
+github.com/jinzhongmin/usf v0.0.0-20230818115909-72f118b9d216/go.mod h1:bbc9ZPecQ4VigHV681E/4i8kOuuqGSgMevKqA7D1EYc=
 golang.org/x/text v0.8.0 h1:57P1ETyNKtuIjB4SRd15iJxuhj8Gc416Y78H3qgMh68=
 golang.org/x/text v0.8.0/go.mod h1:e1OnstbJyHTd6l/uOt8jFFHp6TRDWZR/bV3emEE/zU8=
