@@ -5,18 +5,137 @@ package ffi
 #include <ffi.h>
 #include <stdint.h>
 extern void closure_caller(ffi_cif* cif, void* ret, void* args, void* user_data);
+
+static unsigned int __GOFFI_FFI_DEFAULT_ABI = 9999;
+static unsigned int __GOFFI_FFI_EFI64 = 9999;
+static unsigned int __GOFFI_FFI_FASTCALL = 9999;
+static unsigned int __GOFFI_FFI_FIRST_ABI = 9999;
+static unsigned int __GOFFI_FFI_GNUW64 = 9999;
+static unsigned int __GOFFI_FFI_LAST_ABI = 9999;
+static unsigned int __GOFFI_FFI_MS_CDECL = 9999;
+static unsigned int __GOFFI_FFI_PASCAL = 9999;
+static unsigned int __GOFFI_FFI_REGISTER = 9999;
+static unsigned int __GOFFI_FFI_STDCALL = 9999;
+static unsigned int __GOFFI_FFI_SYSV = 9999;
+static unsigned int __GOFFI_FFI_THISCALL = 9999;
+static unsigned int __GOFFI_FFI_UNIX64 = 9999;
+static unsigned int __GOFFI_FFI_WIN64 = 9999;
+
+static size_t __GOFFI_const_c_cif_size;
+static size_t __GOFFI_const_c_ffi_type_size;
+static size_t __GOFFI_const_c_closure_size;
+static void*  __GOFFI_const_arg_nil;
+
+
+static size_t _FUNC__GOFFI_const_c_cif_size()     {return __GOFFI_const_c_cif_size;}
+static size_t _FUNC__GOFFI_const_c_ffi_type_size(){return __GOFFI_const_c_ffi_type_size;}
+static size_t _FUNC__GOFFI_const_c_closure_size() {return __GOFFI_const_c_closure_size;}
+static void*  _FUNC__GOFFI_const_arg_nil()        {return __GOFFI_const_arg_nil;}
+
+static unsigned int _FUNC__GOFFI_FFI_DEFAULT_ABI(){return __GOFFI_FFI_DEFAULT_ABI;}
+static unsigned int _FUNC__GOFFI_FFI_EFI64(){return __GOFFI_FFI_EFI64;}
+static unsigned int _FUNC__GOFFI_FFI_FASTCALL(){return __GOFFI_FFI_FASTCALL;}
+static unsigned int _FUNC__GOFFI_FFI_FIRST_ABI(){return __GOFFI_FFI_FIRST_ABI;}
+static unsigned int _FUNC__GOFFI_FFI_GNUW64(){return __GOFFI_FFI_GNUW64;}
+static unsigned int _FUNC__GOFFI_FFI_LAST_ABI(){return __GOFFI_FFI_LAST_ABI;}
+static unsigned int _FUNC__GOFFI_FFI_MS_CDECL(){return __GOFFI_FFI_MS_CDECL;}
+static unsigned int _FUNC__GOFFI_FFI_PASCAL(){return __GOFFI_FFI_PASCAL;}
+static unsigned int _FUNC__GOFFI_FFI_REGISTER(){return __GOFFI_FFI_REGISTER;}
+static unsigned int _FUNC__GOFFI_FFI_STDCALL(){return __GOFFI_FFI_STDCALL;}
+static unsigned int _FUNC__GOFFI_FFI_SYSV(){return __GOFFI_FFI_SYSV;}
+static unsigned int _FUNC__GOFFI_FFI_THISCALL(){return __GOFFI_FFI_THISCALL;}
+static unsigned int _FUNC__GOFFI_FFI_UNIX64(){return __GOFFI_FFI_UNIX64;}
+static unsigned int _FUNC__GOFFI_FFI_WIN64(){return __GOFFI_FFI_WIN64;}
+
+static void init(){
+
+  __GOFFI_const_c_cif_size = sizeof(ffi_cif);
+  __GOFFI_const_c_ffi_type_size = sizeof(ffi_type);
+  __GOFFI_const_c_closure_size = sizeof(ffi_closure);
+  __GOFFI_const_arg_nil = NULL;
+
+#if defined(X86_WIN64)
+  __GOFFI_FFI_FIRST_ABI = FFI_FIRST_ABI;
+  __GOFFI_FFI_WIN64 = FFI_WIN64;
+  __GOFFI_FFI_GNUW64 = FFI_GNUW64;
+  __GOFFI_FFI_LAST_ABI = FFI_LAST_ABI;
+#ifdef __GNUC__
+  __GOFFI_FFI_DEFAULT_ABI = FFI_DEFAULT_ABI;
+#else
+  __GOFFI_FFI_DEFAULT_ABI = FFI_DEFAULT_ABI;
+#endif
+
+#elif defined(X86_64) || (defined (__x86_64__) && defined (X86_DARWIN))
+  __GOFFI_FFI_FIRST_ABI = FFI_FIRST_ABI;
+  __GOFFI_FFI_UNIX64 = FFI_UNIX64;
+  __GOFFI_FFI_WIN64 = FFI_WIN64;
+  __GOFFI_FFI_EFI64 = FFI_EFI64;
+  __GOFFI_FFI_GNUW64 = FFI_GNUW64;
+  __GOFFI_FFI_LAST_ABI = FFI_LAST_ABI;
+  __GOFFI_FFI_DEFAULT_ABI = FFI_DEFAULT_ABI;
+#elif defined(X86_WIN32)
+  __GOFFI_FFI_FIRST_ABI = FFI_FIRST_ABI
+  __GOFFI_FFI_SYSV = FFI_SYSV
+  __GOFFI_FFI_STDCALL = FFI_STDCALL
+  __GOFFI_FFI_THISCALL = FFI_THISCALL
+  __GOFFI_FFI_FASTCALL = FFI_FASTCALL
+  __GOFFI_FFI_MS_CDECL = FFI_MS_CDECL
+  __GOFFI_FFI_PASCAL = FFI_PASCAL
+  __GOFFI_FFI_REGISTER = FFI_REGISTER
+  __GOFFI_FFI_LAST_ABI, = FFI_LAST_ABI,
+  __GOFFI_FFI_DEFAULT_ABI = FFI_DEFAULT_ABI
+#else
+  __GOFFI_FFI_FIRST_ABI = FFI_FIRST_ABI
+  __GOFFI_FFI_SYSV = FFI_SYSV
+  __GOFFI_FFI_STDCALL = FFI_STDCALL
+  __GOFFI_FFI_THISCALL = FFI_THISCALL
+  __GOFFI_FFI_FASTCALL = FFI_FASTCALL
+  __GOFFI_FFI_MS_CDECL = FFI_MS_CDECL
+  __GOFFI_FFI_PASCAL = FFI_PASCAL
+  __GOFFI_FFI_REGISTER = FFI_REGISTER
+  __GOFFI_FFI_LAST_ABI, = FFI_LAST_ABI,
+  __GOFFI_FFI_DEFAULT_ABI = FFI_DEFAULT_ABI
+#endif
+}
 */
 import "C"
 import (
 	"errors"
+	"runtime/cgo"
 	"unsafe"
 
 	"github.com/jinzhongmin/usf"
 )
 
-type Type *C.ffi_type
+type (
+	Type   *C.ffi_type
+	Status C.ffi_status
+	Abi    C.ffi_abi
+)
+
+func (a Abi) cvt() C.ffi_abi {
+	if a == 9999 {
+		panic("abi not define int this system")
+	}
+	return C.ffi_abi(a)
+}
 
 var (
+	AbiDefault  Abi
+	AbiFirst    Abi
+	AbiLast     Abi
+	AbiEfi64    Abi
+	AbiFastcall Abi
+	AbiGnuw64   Abi
+	AbiMsCdecl  Abi
+	AbiPascal   Abi
+	AbiRegister Abi
+	AbiStdcall  Abi
+	AbiSysv     Abi
+	AbiThiscall Abi
+	AbiUnix64   Abi
+	AbiWin64    Abi
+
 	Void    Type = &C.ffi_type_void
 	Pointer Type = &C.ffi_type_pointer
 	Uint8   Type = &C.ffi_type_uint8
@@ -56,8 +175,6 @@ func Struct(size uint64, alignment uint16, elms []Type) Type {
 	return Type(t)
 }
 
-type Status C.ffi_status
-
 const (
 	StatusOk         Status = C.FFI_OK
 	StatusBadTypedef Status = C.FFI_BAD_TYPEDEF
@@ -83,29 +200,51 @@ func (st Status) Error() error {
 type Cif struct {
 	cif    *C.ffi_cif
 	params unsafe.Pointer
-	// ret    unsafe.Pointer
 }
 
-var _zeroCCif = C.ffi_cif{}
-var _zeroCCifSize uint64 = 0
-var _zeroClosure = Closure{}
-var _zeroClosureSize uint64 = 0
-var _zeroCClosure = C.ffi_closure{}
-var _zeroCClosureSize uint64 = 0
-var _voidParams = []Type{}      // void params
-var _voidArgs = []interface{}{} // void args
-var _nilArg = usf.MallocN(1, 8) // nil arg
+var (
+	_voidParams = []Type{}        // void params
+	_voidArgs   = []interface{}{} // void args
+
+	_sizeOfCFfiType_ uint64
+	_sizeOfCCif_     uint64
+	_sizeOfCClosure_ uint64
+	_cNil_           unsafe.Pointer
+)
+
+func _sizeOfCFfiType() uint64 { return _sizeOfCFfiType_ }
+func _sizeOfCCif() uint64     { return _sizeOfCCif_ }
+func _sizeOfCClosure() uint64 { return _sizeOfCClosure_ }
+func _cNil() unsafe.Pointer   { return _cNil_ }
+
 func init() {
-	usf.Memset(_nilArg, 0, 8)
-	_zeroCCifSize = usf.SizeOf(_zeroCCif)
-	_zeroClosureSize = usf.SizeOf(_zeroClosure)
-	_zeroCClosureSize = usf.SizeOf(_zeroCClosure)
+	C.init()
+	_sizeOfCFfiType_ = uint64(C._FUNC__GOFFI_const_c_ffi_type_size())
+	_sizeOfCCif_ = uint64(C._FUNC__GOFFI_const_c_cif_size())
+	_sizeOfCClosure_ = uint64(C._FUNC__GOFFI_const_c_closure_size())
+	_cNil_ = C._FUNC__GOFFI_const_arg_nil()
+
+	AbiDefault = Abi(C._FUNC__GOFFI_FFI_DEFAULT_ABI())
+	AbiFirst = Abi(C._FUNC__GOFFI_FFI_FIRST_ABI())
+	AbiLast = Abi(C._FUNC__GOFFI_FFI_LAST_ABI())
+	AbiEfi64 = Abi(C._FUNC__GOFFI_FFI_EFI64())
+	AbiFastcall = Abi(C._FUNC__GOFFI_FFI_FASTCALL())
+	AbiGnuw64 = Abi(C._FUNC__GOFFI_FFI_GNUW64())
+	AbiMsCdecl = Abi(C._FUNC__GOFFI_FFI_MS_CDECL())
+	AbiPascal = Abi(C._FUNC__GOFFI_FFI_PASCAL())
+	AbiRegister = Abi(C._FUNC__GOFFI_FFI_REGISTER())
+	AbiStdcall = Abi(C._FUNC__GOFFI_FFI_STDCALL())
+	AbiSysv = Abi(C._FUNC__GOFFI_FFI_SYSV())
+	AbiThiscall = Abi(C._FUNC__GOFFI_FFI_THISCALL())
+	AbiUnix64 = Abi(C._FUNC__GOFFI_FFI_UNIX64())
+	AbiWin64 = Abi(C._FUNC__GOFFI_FFI_WIN64())
 }
 
 func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 	cif := new(Cif)
-	cif.cif = (*C.ffi_cif)(usf.MallocN(1, _zeroCCifSize))
-	usf.Memset(unsafe.Pointer(cif.cif), 0, _zeroCCifSize)
+	cifSize := _sizeOfCCif()
+	cif.cif = (*C.ffi_cif)(usf.Malloc(cifSize))
+	usf.Memset(unsafe.Pointer(cif.cif), 0, cifSize)
 
 	_inputs := inputs
 	if inputs == nil {
@@ -126,7 +265,7 @@ func NewCif(abi Abi, output Type, inputs []Type) (*Cif, error) {
 		retTyp = Void
 	}
 
-	st := C.ffi_prep_cif(cif.cif, abi.abi(),
+	st := C.ffi_prep_cif(cif.cif, abi.cvt(),
 		C.uint(inLen), retTyp, (**C.ffi_type)(cif.params))
 
 	err := Status(st).Error()
@@ -155,7 +294,7 @@ func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}, ret unsafe.Pointer) 
 
 		for i, ii := uint64(0), uint64(1); i < argc; i++ {
 			if arg[i] == nil {
-				dst[i] = _nilArg
+				dst[i] = _cNil()
 				ii += 2
 				continue
 			}
@@ -170,9 +309,6 @@ func (cif *Cif) Call(fn unsafe.Pointer, args []interface{}, ret unsafe.Pointer) 
 	}
 }
 func (cif *Cif) Free() {
-	// if cif.ret != nil {
-	// 	usf.Free(cif.ret)
-	// }
 	if cif == nil {
 		return
 	}
@@ -184,67 +320,64 @@ func (cif *Cif) Free() {
 	}
 }
 
-func NewPtr() unsafe.Pointer {
-	p := (usf.MallocN(1, 8))
-	usf.Memset(unsafe.Pointer(p), 0, 8)
-	return p
-}
-
 type Closure struct {
-	Cfunc   unsafe.Pointer
+	cfunc   unsafe.Pointer
 	cif     *Cif
 	closure *C.ffi_closure
 
-	Callback      func(args []unsafe.Pointer, ret unsafe.Pointer)
-	callback_argc int
+	funcReal   func(args []unsafe.Pointer, ret unsafe.Pointer)
+	funcHandle cgo.Handle
 }
+
+var funcArgc = make(map[cgo.Handle]uint64)
 
 //export closure_caller
 func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
-	cls := (*Closure)(userData)
-	cls.Callback(*(*[]unsafe.Pointer)(usf.Slice(args, uint64(cls.callback_argc))), ret)
+	ha := *(*cgo.Handle)(userData)
+	fn := ha.Value().(func(args []unsafe.Pointer, ret unsafe.Pointer))
+	nargs := *(*[]unsafe.Pointer)(usf.Slice(args, funcArgc[ha]))
+	fn(nargs, ret)
 }
+
 func NewClosure(aib Abi, outType Type, inTypes []Type, callback func(args []unsafe.Pointer, ret unsafe.Pointer)) *Closure {
 	var err error
-	cls := (*Closure)(usf.MallocN(1, _zeroClosureSize))
+	cls := (*Closure)(usf.Malloc(_sizeOfCCif()))
 	cls.cif, err = NewCif(aib, outType, inTypes)
 	if err != nil {
 		panic(err)
 	}
 
-	cfn := usf.MallocN(1, 8)
+	cls.cfunc = usf.MallocN(1, 8)
 	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.uint64_t(_zeroCClosureSize), (*unsafe.Pointer)(cfn)))
+		C.uint64_t(_sizeOfCClosure()), (*unsafe.Pointer)(cls.cfunc)))
 
-	cls.Cfunc = usf.Pop(cfn)
-	usf.Free(cfn)
-
-	cls.Callback = callback
-	cls.callback_argc = 0
-	if inTypes != nil {
-		cls.callback_argc = len(inTypes)
-	}
+	cls.funcReal = callback
+	cls.funcHandle = cgo.NewHandle(cls.funcReal)
+	funcArgc[cls.funcHandle] = uint64(len(inTypes))
 
 	C.ffi_prep_closure_loc(cls.closure, cls.cif.cif,
-		(*[0]byte)(C.closure_caller), unsafe.Pointer(cls), cls.Cfunc)
+		(*[0]byte)(C.closure_caller), unsafe.Pointer(&cls.funcHandle), usf.Pop(cls.cfunc))
 	return cls
 }
+func (cls *Closure) FuncPtr() unsafe.Pointer { return usf.Pop(cls.cfunc) }
 func (cls *Closure) Call(args []interface{}, ret unsafe.Pointer) {
-	cls.cif.Call(cls.Cfunc, args, ret)
+	cls.cif.Call(cls.FuncPtr(), args, ret)
 }
 func (cls *Closure) Free() {
 	if cls == nil {
 		return
 	}
+
+	delete(funcArgc, cls.funcHandle)
+	cls.funcHandle.Delete()
+	cls.funcReal = nil
 	if cls.closure != nil {
 		C.ffi_closure_free(unsafe.Pointer(cls.closure))
 	}
-	if cls.Cfunc != nil {
-		usf.Free(cls.Cfunc)
+	if cls.cfunc != nil {
+		usf.Free(cls.cfunc)
 	}
-	if cls.Callback != nil {
-		cls.Callback = nil
-	}
+
 	if cls.cif != nil {
 		cls.cif.Free()
 	}

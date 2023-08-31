@@ -23,8 +23,13 @@ const (
 	CNilStr string = "\r\n\n\r\000\n\r\n\r\000\t\a"
 )
 
+func init() {
+	_retVoid = usf.Malloc(8)
+	usf.Push(_retVoid, nil)
+}
+
 var (
-	_retVoid = ffi.NewPtr() // public return value ptr
+	_retVoid unsafe.Pointer // public return value ptr
 
 	AbiDefault  Abi = Abi(ffi.AbiDefault)
 	AbiFirst    Abi = Abi(ffi.AbiFirst)
@@ -74,39 +79,241 @@ func CStr(s string) unsafe.Pointer {
 	}
 	return unsafe.Pointer(C.CString(s))
 }
-func GoStr(p unsafe.Pointer) string { return C.GoString((*C.char)(p)) }
 func CBool(v bool) int32 {
 	if v {
 		return 1
 	}
 	return 0
 }
-func GoBool(v int32) bool { return v == 1 }
+func GoStr(p unsafe.Pointer) string { return C.GoString((*C.char)(p)) }
+func GoBool(v int32) bool           { return v == 1 }
 
-type CStrs []unsafe.Pointer
+type (
+	Bool    int32
+	BoolRef *Bool
+)
 
-func NewCStrs(strs []string) CStrs {
-	l := len(strs)
-	p := usf.MallocN(uint64(l), 8)
-	css := *(*[]unsafe.Pointer)(usf.Slice(p, uint64(l)))
-	for i := range strs {
-		css[i] = CStr(strs[i])
+const (
+	True  Bool = 1
+	False Bool = 0
+)
+
+func BoolFrom(b bool) Bool {
+	if b {
+		return True
 	}
-	return CStrs(css)
+	return False
 }
-func (css CStrs) Ptr() unsafe.Pointer {
-	return unsafe.Pointer(&css[0])
-}
-func (css CStrs) Free() {
-	for i := range css {
-		usf.Free(css[i])
+func BoolPtrFrom(b *bool) *Bool {
+	r := False
+	if *b {
+		r = True
 	}
-	usf.Free(unsafe.Pointer(&css[0]))
+	return &r
 }
-func (css CStrs) Set(i int, str string) { css[i] = CStr(str) }
-func (css CStrs) FreeSet(i int, str string) {
-	Free(css[i])
-	css[i] = CStr(str)
+func (b Bool) Is() bool      { return b != 0 }
+func (b Bool) Ok() bool      { return b != 0 }
+func (b Bool) Ref(ref *bool) { (*ref) = b.Is() }
+func (b Bool) Not() Bool {
+	if b == True {
+		return False
+	}
+	return True
+}
+
+type (
+	gostr struct {
+		data unsafe.Pointer
+		len  int
+	}
+	Str struct {
+		data unsafe.Pointer
+		len  uint64 //without \0
+		cap  uint64
+	}
+)
+
+func NewStr(str string, cap ...uint64) *Str {
+	gs := *(*gostr)((unsafe.Pointer)(&str))
+
+	var _cap uint64
+	if cap != nil && cap[0] > uint64(gs.len)+1 {
+		_cap = cap[0]
+	} else {
+		_cap = uint64(gs.len) + 1
+	}
+
+	_len := uint64(gs.len)
+	_data := usf.Malloc(_cap)
+	usf.Memset(_data, 0, _cap)
+	usf.Memcpy(_data, gs.data, uint64(gs.len))
+	return &Str{len: _len, cap: _cap, data: _data}
+}
+func NewStrNil() *Str { return &Str{} }
+func (str *Str) Free() {
+	if str == nil || str.data == nil {
+		return
+	}
+	usf.Free(str.data)
+	str.data = nil
+}
+func (str *Str) CheckLen() {
+	bts := str._capBytes()
+	i := uint64(0)
+	for ; i < str.cap; i++ {
+		if bts[i] != 0 {
+			continue
+		}
+		break
+	}
+	str.len = i
+	for ; i < str.cap; i++ {
+		bts[i] = 0
+	}
+}
+func (str *Str) Len() uint64         { return str.len } // without \0
+func (str *Str) Cap() uint64         { return str.cap } // without \0
+func (str *Str) Ptr() unsafe.Pointer { return str.data }
+func (str *Str) Clear() {
+	bs := str._capBytes()
+	for i := 0; i < int(str.len); i++ {
+		bs[i] = 0
+	}
+	str.len = 0
+}
+func (str *Str) AddrPtr() unsafe.Pointer {
+	if str == nil {
+		ptr := (*C.char)(nil)
+		return unsafe.Pointer(&ptr)
+	}
+	return unsafe.Pointer(&str.data)
+}
+func (str *Str) LenBytes() []byte   { return *(*[]byte)(unsafe.Pointer(str)) } // without \0
+func (str *Str) CapBytes() []byte   { return str._capBytes() }
+func (str *Str) AddCap(size uint64) { str._capAadd(size) }
+func (str *Str) Str() string        { return C.GoString((*C.char)(str.data)) }
+func (str *Str) Get() string        { return C.GoString((*C.char)(str.data)) }
+func (str *Str) Set(s string) *Str {
+	gs := *(*gostr)((unsafe.Pointer)(&s))
+	if uint64(gs.len) < str.len {
+		for i := gs.len; i < int(str.len); i++ {
+			str.CapBytes()[i] = 0
+		}
+	} else if str.cap < uint64(gs.len+1) {
+		str._capAadd(uint64(gs.len) + 32 - str.cap)
+	}
+	str.len = uint64(gs.len)
+	usf.Memcpy(str.data, gs.data, str.len)
+	return str
+}
+func (str *Str) SetNil() {
+	usf.Free(str.data)
+	str.data = nil
+	str.len = 0
+	str.cap = 0
+}
+func (str *Str) Append(s string) {
+	gs := *(*gostr)((unsafe.Pointer)(&s))
+	all_len := str.len + uint64(gs.len)
+
+	if str.cap < all_len+1 {
+		str._capAadd(all_len + 32 - str.cap)
+	}
+	start := unsafe.Pointer(&str._capBytes()[str.len])
+	usf.Memcpy(start, gs.data, uint64(gs.len))
+	str.len = all_len
+}
+func (str *Str) CopyTo(dst *Str) {
+	usf.Memcpy(dst.data, str.data, str.len)
+}
+func (str *Str) _capBytes() []byte { return *(*[]byte)(usf.Slice(str.data, str.cap)) }
+func (str *Str) _capAadd(size uint64) {
+	i := str.cap
+	str.cap += size
+	str.data = usf.Realloc(str.data, str.cap)
+	bts := str.CapBytes()
+	for ; i < str.cap; i++ {
+		bts[i] = 0
+	}
+}
+
+type (
+	ListItem interface {
+		Ptr() unsafe.Pointer
+	}
+	List struct {
+		len  uint64
+		cap  uint64
+		data unsafe.Pointer
+	}
+)
+
+func NewList(cap uint64) *List {
+	data := usf.MallocN(cap, 8)
+	usf.Memset(data, 0, cap*8)
+	return &List{len: 0, cap: cap, data: data}
+}
+func NewListFrom(items []ListItem, cap ...uint64) *List {
+	items_len := uint64(len(items))
+	var _cap uint64
+	if cap != nil && cap[0] > items_len {
+		_cap = cap[0]
+	} else {
+		_cap = items_len
+	}
+	_data := usf.MallocN(_cap, 8)
+	usf.Memset(_data, 0, _cap*8)
+	for i := range items {
+		usf.PushAt(_data, uint64(i), items[i].Ptr())
+	}
+	return &List{len: items_len, cap: _cap, data: _data}
+}
+func (li *List) Free() {
+	li.len = 0
+	li.cap = 0
+	usf.Free(li.data)
+}
+func (li *List) FreeAll() {
+	ps := li.CapPtrs()
+	for i := 0; i < int(li.len); i++ {
+		usf.Free(ps[i])
+	}
+	li.len = 0
+	li.cap = 0
+	usf.Free(li.data)
+}
+func (li *List) Len() uint64               { return li.len }
+func (li *List) Ptr() unsafe.Pointer       { return li.data }
+func (li *List) AddrPtr() unsafe.Pointer   { return unsafe.Pointer(&li.data) }
+func (li *List) CapPtrs() []unsafe.Pointer { return li._capPtrs() }
+func (li *List) Set(idx uint64, ptr unsafe.Pointer) {
+	if !(idx < li.len) {
+		panic("idx out of rang")
+	}
+	usf.PushAt(li.data, idx, ptr)
+}
+func (li *List) Get(idx uint64) unsafe.Pointer {
+	if !(idx < li.cap) {
+		panic("idx out of rang")
+	}
+	return usf.PopAt(li.data, idx)
+}
+func (li *List) Append(ptr unsafe.Pointer) {
+	if li.len == li.cap {
+		li._capAdd(8)
+	}
+	li._capPtrs()[li.len] = ptr
+	li.len += 1
+}
+func (li *List) _capPtrs() []unsafe.Pointer { return *(*[]unsafe.Pointer)(usf.Slice(li.data, li.cap)) }
+func (li *List) _capAdd(size uint64) {
+	i := li.cap
+	li.cap += size
+	li.data = usf.Realloc(li.data, li.cap*8)
+	ps := li._capPtrs()
+	for ; i < li.cap; i++ {
+		ps[i] = nil
+	}
 }
 
 type (
@@ -305,7 +512,7 @@ func (v *Value) SetU64(i uint64)         { *(*uint64)(unsafe.Pointer(v)) = i }
 func (v *Value) SetI64(i int64)          { *(*int64)(unsafe.Pointer(v)) = i }
 func (v *Value) SetF32(i float32)        { *(*float32)(unsafe.Pointer(v)) = i }
 func (v *Value) SetF64(i float64)        { *(*float64)(unsafe.Pointer(v)) = i }
-func (v *Value) SetPtr(i unsafe.Pointer) { v.v = i }
+func (v *Value) SetPtr(i unsafe.Pointer) { *(*unsafe.Pointer)(unsafe.Pointer(v)) = i }
 
 type Callback struct {
 	*ffi.Closure
@@ -314,15 +521,32 @@ type Callback struct {
 	CallbackFunc interface{}
 }
 
+func (cb *Callback) FuncPtr() unsafe.Pointer { return cb.Closure.FuncPtr() }
+func (cb *Callback) Free() {
+	if cb == nil {
+		return
+	}
+	cb.Closure.Free()
+	cb.CallbackFunc = nil
+	cb.CallbackCvt = nil
+
+	usf.Free(unsafe.Pointer(cb))
+}
+func createClosureCallback(cb *Callback) func(args []unsafe.Pointer, ret unsafe.Pointer) {
+	fn := func(args []unsafe.Pointer, ret unsafe.Pointer) {
+		if cb == nil || cb.CallbackCvt == nil {
+			return
+		}
+		_args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
+		cb.CallbackCvt(cb, _args, (*Value)(ret))
+	}
+	return fn
+}
 func NewCallback(abi Abi, outType Type, inTypes []Type) *Callback {
-	cb := new(Callback)
-	cb.Closure = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType), *(*[]ffi.Type)(unsafe.Pointer(&inTypes)),
-		func(args []unsafe.Pointer, ret unsafe.Pointer) {
-			if cb.CallbackCvt == nil {
-				return
-			}
-			_args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
-			cb.CallbackCvt(cb, _args, (*Value)(ret))
-		})
+	cb := (*Callback)(usf.MallocOf(1, Callback{}))
+	cb.Closure = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType),
+		*(*[]ffi.Type)(unsafe.Pointer(&inTypes)), createClosureCallback(cb))
+	cb.CallbackCvt = nil
+	cb.CallbackFunc = nil
 	return cb
 }

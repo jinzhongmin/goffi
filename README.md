@@ -80,14 +80,14 @@ func main() {
 	opera_func.CallbackFunc = func(a int32, b int32) int32 {
 		return a + b
 	}
-	add := C.opera(opera_func.Cfunc, a, b)
+	add := C.opera(opera_func.FuncPtr(), a, b)
 	fmt.Println("a + b = ", add)
 
 	//change opera_func to mul
 	opera_func.CallbackFunc = func(a int32, b int32) int32 {
 		return a * b
 	}
-	mul := C.opera(opera_func.Cfunc, a, b)
+	mul := C.opera(opera_func.FuncPtr(), a, b)
 	fmt.Println("a * b = ", mul)
 
 }
