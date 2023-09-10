@@ -73,12 +73,15 @@ func Open(file string, mod Mode) (*Handle, error) {
 	return &Handle{c: h}, nil
 }
 
+func GetDefaultHandle() *Handle { return &Handle{c: DlsymDefault} }
+func GetNextHandle() *Handle    { return &Handle{c: DlsymNext} }
+
 func (hd *Handle) Ptr() unsafe.Pointer { return hd.c }
 
 // /* Close a symbol table handle. */
 // DLFCN_EXPORT int dlclose(void *handle);
 func (hd *Handle) Close() {
-	if hd != nil && hd.c != nil {
+	if hd != nil && hd.c != DlsymDefault && hd.c != DlsymNext {
 		C.dlclose(hd.c)
 	}
 }

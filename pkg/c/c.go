@@ -351,6 +351,20 @@ type Lib struct {
 	handle     *dlfcn.Handle
 }
 
+func LoadLib(libpath string, mod LibMode) (*Lib, error) {
+	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
+	if err != nil {
+		return nil, errors.Join(errors.New("load lib error"), err)
+	}
+	return &Lib{handle: l, prototypes: make([]*prototype, 0)}, nil
+}
+func NewLibDefault() *Lib {
+	return &Lib{handle: dlfcn.GetDefaultHandle(), prototypes: make([]*prototype, 0)}
+}
+func NewLibNext() *Lib {
+	return &Lib{handle: dlfcn.GetNextHandle(), prototypes: make([]*prototype, 0)}
+}
+
 func NewLib(libpath string, mod LibMode) (*Lib, error) {
 	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
 	if err != nil {
@@ -363,6 +377,7 @@ func NewLibFrom(lib *Lib) *Lib {
 	return &Lib{handle: lib.handle, prototypes: make([]*prototype, 0)}
 }
 
+func (lib *Lib) UnLoad() { lib.handle.Close() }
 func (lib *Lib) lookup(outType Type, inTypes []Type) *prototype {
 	protp := lib.prototypes.lookup(outType, inTypes)
 	if protp != nil {
