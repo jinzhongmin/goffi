@@ -4,8 +4,8 @@ package dlfcn
 #cgo LDFLAGS: -ldl
 #include <stdlib.h>
 #include <dlfcn.h>
-void *rtdl_default(){ return RTLD_DEFAULT; }
-void *rtdl_next(){ return RTLD_NEXT; }
+void *rtdl_default(){ return (void *)0; }
+void *rtdl_next(){ return (void *)-1; }
 */
 import "C"
 import (
