@@ -2,7 +2,7 @@ package c
 
 import "C"
 import (
-	"errors"
+	"fmt"
 	"unsafe"
 
 	"github.com/jinzhongmin/goffi/pkg/dlfcn"
@@ -354,7 +354,8 @@ type Lib struct {
 func LoadLib(libpath string, mod LibMode) (*Lib, error) {
 	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
 	if err != nil {
-		return nil, errors.Join(errors.New("load lib error"), err)
+		// return nil, errors.Join(errors.New("load lib error"), err)
+		return nil, fmt.Errorf("load lib error, %s", err.Error())
 	}
 	return &Lib{handle: l, prototypes: make([]*prototype, 0)}, nil
 }
@@ -368,7 +369,8 @@ func NewLibNext() *Lib {
 func NewLib(libpath string, mod LibMode) (*Lib, error) {
 	l, err := dlfcn.Open(libpath, dlfcn.Mode(mod))
 	if err != nil {
-		return nil, errors.Join(errors.New("load lib error"), err)
+		// return nil, errors.Join(errors.New("load lib error"), err)
+		return nil, fmt.Errorf("load lib error, %s", err.Error())
 	}
 	return &Lib{handle: l, prototypes: make([]*prototype, 0)}, nil
 }

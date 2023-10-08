@@ -101,30 +101,29 @@ func (hd Handle) Symbol(name string) (unsafe.Pointer, error) {
 }
 
 // /* Structure filled in by dladdr() */
-type Info struct {
-	Fname string
-	Fbase unsafe.Pointer
-	Sname string
-	Saddr unsafe.Pointer
-}
+// type Info struct {
+// 	Fname string
+// 	Fbase unsafe.Pointer
+// 	Sname string
+// 	Saddr unsafe.Pointer
+// }
 
 // /* Translate address to symbolic information (no POSIX standard) */
 // DLFCN_EXPORT int dladdr(const void *addr, Dl_info *info);
-func Address(addr unsafe.Pointer) (*Info, error) {
-	inf := (*C.Dl_info)(C.malloc(32))
-	defer C.free(unsafe.Pointer(inf))
-	i := C.dladdr(addr, inf)
-	if i == 0 {
-		return nil, errors.New("not found")
-	}
-
-	return &Info{
-		Fname: C.GoString(inf.dli_fname),
-		Fbase: inf.dli_fbase,
-		Sname: C.GoString(inf.dli_sname),
-		Saddr: inf.dli_saddr,
-	}, nil
-}
+// func Address(addr unsafe.Pointer) (*Info, error) {
+// 	inf := (*C.Dl_info)(C.malloc(32))
+// 	defer C.free(unsafe.Pointer(inf))
+// 	i := C.dladdr(addr, inf)
+// 	if i == 0 {
+// 		return nil, errors.New("not found")
+// 	}
+// 	return &Info{
+// 		Fname: C.GoString(inf.dli_fname),
+// 		Fbase: inf.dli_fbase,
+// 		Sname: C.GoString(inf.dli_sname),
+// 		Saddr: inf.dli_saddr,
+// 	}, nil
+// }
 
 // The symbol lookup happens in the normal global scope.
 // #define RTLD_DEFAULT    ((void *)0)
