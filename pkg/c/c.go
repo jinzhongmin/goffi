@@ -120,6 +120,14 @@ func (b Bool) Not() Bool {
 	}
 	return True
 }
+func (b *Bool) Set(v bool) {
+	if v {
+		(*b) = True
+	} else {
+		(*b) = False
+	}
+
+}
 
 type (
 	gostr struct {
@@ -531,39 +539,26 @@ func (v *Value) SetF32(i float32)        { *(*float32)(unsafe.Pointer(v)) = i }
 func (v *Value) SetF64(i float64)        { *(*float64)(unsafe.Pointer(v)) = i }
 func (v *Value) SetPtr(i unsafe.Pointer) { *(*unsafe.Pointer)(unsafe.Pointer(v)) = i }
 
-type Callback struct {
-	*ffi.Closure
-	//Converts the input and output variables to their real types and calls CallbackFunc
-	CallbackCvt  func(callback *Callback, args []*Value, ret *Value)
-	CallbackFunc interface{}
-}
+type CallbackPrototype struct{ cif *ffi.Cif }
 
-func (cb *Callback) FuncPtr() unsafe.Pointer { return cb.Closure.FuncPtr() }
-func (cb *Callback) Free() {
-	if cb == nil {
-		return
+func DefineCallbackPrototype(abi Abi, outType Type, inTypes []Type) *CallbackPrototype {
+	cif, err := ffi.NewCif(ffi.Abi(abi), ffi.Type(outType),
+		*(*[]ffi.Type)(unsafe.Pointer(&inTypes)))
+	if err != nil {
+		panic(err)
 	}
-	cb.Closure.Free()
-	cb.CallbackFunc = nil
-	cb.CallbackCvt = nil
+	return &CallbackPrototype{cif}
+}
+func (cp *CallbackPrototype) Free() { cp.cif.Free() }
 
-	usf.Free(unsafe.Pointer(cb))
-}
-func createClosureCallback(cb *Callback) func(args []unsafe.Pointer, ret unsafe.Pointer) {
-	fn := func(args []unsafe.Pointer, ret unsafe.Pointer) {
-		if cb == nil || cb.CallbackCvt == nil {
-			return
-		}
-		_args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&args[0]), uint64(len(args))))
-		cb.CallbackCvt(cb, _args, (*Value)(ret))
+type Callback struct{ cls *ffi.Closure }
+
+func (cp *CallbackPrototype) CreateCallback(cb func(args []*Value, ret *Value)) *Callback {
+	fn := func(a []unsafe.Pointer, r unsafe.Pointer) {
+		args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&a[0]), uint64(len(a))))
+		cb(args, (*Value)(r))
 	}
-	return fn
+	return &Callback{cp.cif.CreateClosure(fn)}
 }
-func NewCallback(abi Abi, outType Type, inTypes []Type) *Callback {
-	cb := (*Callback)(usf.MallocOf(1, Callback{}))
-	cb.Closure = ffi.NewClosure(ffi.Abi(abi), ffi.Type(outType),
-		*(*[]ffi.Type)(unsafe.Pointer(&inTypes)), createClosureCallback(cb))
-	cb.CallbackCvt = nil
-	cb.CallbackFunc = nil
-	return cb
-}
+func (cb *Callback) CFuncPtr() unsafe.Pointer { return cb.cls.CFuncPtr() }
+func (cb *Callback) Free()                    { cb.cls.Free() }

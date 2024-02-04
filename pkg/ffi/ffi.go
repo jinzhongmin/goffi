@@ -321,65 +321,54 @@ func (cif *Cif) Free() {
 }
 
 type Closure struct {
-	cfunc   unsafe.Pointer
+	ptr     unsafe.Pointer //function pointer on the c-side
 	cif     *Cif
 	closure *C.ffi_closure
 
-	funcReal   func(args []unsafe.Pointer, ret unsafe.Pointer)
-	funcHandle cgo.Handle
+	fn       func(args []unsafe.Pointer, ret unsafe.Pointer)
+	fnHandle cgo.Handle
 }
 
-var funcArgc = make(map[cgo.Handle]uint64)
+var func_store = make(map[cgo.Handle]uint64) // map[func]argc
 
 //export closure_caller
 func closure_caller(cif *C.ffi_cif, ret, args, userData unsafe.Pointer) {
-	ha := *(*cgo.Handle)(userData)
-	fn := ha.Value().(func(args []unsafe.Pointer, ret unsafe.Pointer))
-	nargs := *(*[]unsafe.Pointer)(usf.Slice(args, funcArgc[ha]))
-	fn(nargs, ret)
+	hd := *(*cgo.Handle)(userData)
+	fn := hd.Value().(func(args []unsafe.Pointer, ret unsafe.Pointer))
+	argc := *(*[]unsafe.Pointer)(usf.Slice(args, func_store[hd]))
+	fn(argc, ret)
 }
 
-func NewClosure(aib Abi, outType Type, inTypes []Type, callback func(args []unsafe.Pointer, ret unsafe.Pointer)) *Closure {
-	var err error
+func (cif *Cif) CreateClosure(fn func(args []unsafe.Pointer, ret unsafe.Pointer)) *Closure {
 	cls := (*Closure)(usf.Malloc(_sizeOfCCif()))
-	cls.cif, err = NewCif(aib, outType, inTypes)
-	if err != nil {
-		panic(err)
-	}
+	cls.cif = cif
 
-	cls.cfunc = usf.MallocN(1, 8)
+	cls.ptr = usf.MallocN(1, 8)
 	cls.closure = (*C.ffi_closure)(C.ffi_closure_alloc(
-		C.uint64_t(_sizeOfCClosure()), (*unsafe.Pointer)(cls.cfunc)))
+		C.uint64_t(_sizeOfCClosure()), (*unsafe.Pointer)(cls.ptr)))
 
-	cls.funcReal = callback
-	cls.funcHandle = cgo.NewHandle(cls.funcReal)
-	funcArgc[cls.funcHandle] = uint64(len(inTypes))
+	cls.fn = fn
+	cls.fnHandle = cgo.NewHandle(cls.fn)
+	func_store[cls.fnHandle] = uint64(cif.cif.nargs)
+	C.ffi_prep_closure_loc(cls.closure, cif.cif,
+		(*[0]byte)(C.closure_caller), unsafe.Pointer(&cls.fnHandle), usf.Pop(cls.ptr))
 
-	C.ffi_prep_closure_loc(cls.closure, cls.cif.cif,
-		(*[0]byte)(C.closure_caller), unsafe.Pointer(&cls.funcHandle), usf.Pop(cls.cfunc))
 	return cls
 }
-func (cls *Closure) FuncPtr() unsafe.Pointer { return usf.Pop(cls.cfunc) }
-func (cls *Closure) Call(args []interface{}, ret unsafe.Pointer) {
-	cls.cif.Call(cls.FuncPtr(), args, ret)
-}
+
+func (cls *Closure) CFuncPtr() unsafe.Pointer { return usf.Pop(cls.ptr) }
 func (cls *Closure) Free() {
 	if cls == nil {
 		return
 	}
 
-	delete(funcArgc, cls.funcHandle)
-	cls.funcHandle.Delete()
-	cls.funcReal = nil
+	delete(func_store, cls.fnHandle)
+	cls.fnHandle.Delete()
+	cls.fn = nil
 	if cls.closure != nil {
 		C.ffi_closure_free(unsafe.Pointer(cls.closure))
 	}
-	if cls.cfunc != nil {
-		usf.Free(cls.cfunc)
+	if cls.ptr != nil {
+		usf.Free(cls.ptr)
 	}
-
-	if cls.cif != nil {
-		cls.cif.Free()
-	}
-	usf.Free(unsafe.Pointer(cls))
 }

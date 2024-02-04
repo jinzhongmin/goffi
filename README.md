@@ -58,37 +58,33 @@ func main() {
 	//###################
 
 	//define callback prototype
-	opera_func := c.NewCallback(c.AbiDefault, c.I32, []c.Type{c.I32, c.I32})
-
-	//opera_func is base goffi.Closure
-	//CallbackCvt wrap from goffi.Closure.Callback
-	//CallbackCvt for convert goffi.Closure.Callback to real func CallbackFunc
-	opera_func.CallbackCvt = func(callback *c.Callback, args []*c.Value, ret *c.Value) {
-		fn, ok := callback.CallbackFunc.(func(int32, int32) int32)
-		if ok {
-			a := args[0].I32()
-			b := args[1].I32()
-			ret.SetI32(fn(a, b))
-		}
-	}
+	cbprototype := c.DefineCallbackPrototype(c.AbiDefault, c.I32, []c.Type{c.I32, c.I32})
+	defer cbprototype.Free()
 
 	a := C.int(100)
 	b := C.int(200)
 
-	//define opera_func to add
-	//call path, call goffi.Closure.Callback -> call CallbackCvt -> call CallbackFunc
-	opera_func.CallbackFunc = func(a int32, b int32) int32 {
-		return a + b
-	}
-	add := C.opera(opera_func.FuncPtr(), a, b)
+	add_fun := cbprototype.CreateCallback(func(args []*c.Value, ret *c.Value) {
+		a := args[0].I32()
+		b := args[1].I32()
+
+		ret.SetI32(a + b)
+	})
+	add := C.opera(add_fun.CFuncPtr(), a, b)
 	fmt.Println("a + b = ", add)
+	add_fun.Free()
 
 	//change opera_func to mul
-	opera_func.CallbackFunc = func(a int32, b int32) int32 {
-		return a * b
-	}
-	mul := C.opera(opera_func.FuncPtr(), a, b)
+	mul_fun := cbprototype.CreateCallback(func(args []*c.Value, ret *c.Value) {
+		a := args[0].I32()
+		b := args[1].I32()
+
+		ret.SetI32(a * b)
+	})
+
+	mul := C.opera(mul_fun.CFuncPtr(), a, b)
 	fmt.Println("a * b = ", mul)
+	mul_fun.Free()
 
 }
 
