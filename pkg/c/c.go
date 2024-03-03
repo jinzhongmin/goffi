@@ -555,10 +555,18 @@ type Callback struct{ cls *ffi.Closure }
 
 func (cp *CallbackPrototype) CreateCallback(cb func(args []*Value, ret *Value)) *Callback {
 	fn := func(a []unsafe.Pointer, r unsafe.Pointer) {
-		args := *(*[]*Value)(usf.Slice(unsafe.Pointer(&a[0]), uint64(len(a))))
+		args := []*Value{}
+		if len(a) > 0 {
+			args = *(*[]*Value)(usf.Slice(unsafe.Pointer(&a[0]), uint64(len(a))))
+		}
 		cb(args, (*Value)(r))
 	}
 	return &Callback{cp.cif.CreateClosure(fn)}
 }
 func (cb *Callback) CFuncPtr() unsafe.Pointer { return cb.cls.CFuncPtr() }
-func (cb *Callback) Free()                    { cb.cls.Free() }
+func (cb *Callback) Free() {
+	if cb == nil {
+		return
+	}
+	cb.cls.Free()
+}
